@@ -15,8 +15,16 @@ export function createCatalogue({ base = './catalogue/', fetch: f = (...a) => gl
     return r.json();
   }
 
-  async function chargerMeta() {
-    if (!meta) meta = await json('meta.json');
+  // On garde la promesse, pas le résultat : des appels simultanés partagent
+  // la même requête. Un échec est oublié pour qu'on puisse réessayer.
+  function uneFois(chemin) {
+    const p = json(chemin);
+    p.catch(() => { if (meta === p) meta = null; if (musees === p) musees = null; });
+    return p;
+  }
+
+  function chargerMeta() {
+    if (!meta) meta = uneFois('meta.json');
     return meta;
   }
 
@@ -34,8 +42,8 @@ export function createCatalogue({ base = './catalogue/', fetch: f = (...a) => gl
     return tranches.get(nom);
   }
 
-  async function chargerFusions() {
-    if (!fusions) fusions = await json('fusions.json').catch(() => ({}));
+  function chargerFusions() {
+    if (!fusions) fusions = json('fusions.json').catch(() => ({}));
     return fusions;
   }
 
@@ -63,8 +71,8 @@ export function createCatalogue({ base = './catalogue/', fetch: f = (...a) => gl
     fiche,
     fiches,
     canonique,
-    async musees() {
-      if (!musees) musees = await json('musees.json');
+    musees() {
+      if (!musees) musees = uneFois('musees.json');
       return musees;
     },
     async oeuvresDuMusee(id) {
