@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essai du rendu de restauration</title>
+<style>
+  body { background: #141110; color: #eee; font: 13px system-ui; margin: 12px; }
+  .ligne { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: nowrap; overflow-x: auto; }
+  figure { margin: 0; text-align: center; }
+  canvas { display: block; height: 300px; width: auto; background: #222; }
+  h2 { font-size: 14px; margin: 6px 0; font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="sortie"></div>
+<script type="module">
+import { CONFIG } from '../js/config.js';
+import { dessiner, chargerImage, etape } from '../js/rendu/restauration.js';
+
+const params = new URLSearchParams(location.search);
+const ETAPES = (params.get('p') || '0,5,10,20,25,30,35,45,55,70,85,100').split(',').map(Number);
+const OEUVRES = [
+  ['Mona Lisa', 'peinture'],
+  ['The Starry Night', 'peinture'],
+  ['Girl with a Pearl Earring', 'peinture'],
+  ['David (Michelangelo)', 'sculpture'],
+  ['Migrant Mother', 'photographie'],
+  ['The Great Wave off Kanagawa', 'estampe'],
+];
+const liste = params.get('o') ? OEUVRES.filter(([t]) => t.includes(params.get('o'))) : OEUVRES;
+const titres = liste.map(([t]) => t).join('|');
+const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&piprop=thumbnail&pithumbsize=600&format=json&origin=*&redirects=1&titles=${encodeURIComponent(titres)}`).then((x) => x.json());
+const pages = Object.values(r.query.pages);
+const sortie = document.getElementById('sortie');
+for (const [titre, support] of liste) {
+  const page = pages.find((p) => p.title === titre || r.query.redirects?.some((x) => x.from === titre && x.to === p.title));
+  const url = page?.thumbnail?.source;
+  const img = await chargerImage(url).catch(() => null);
+  const h2 = document.createElement('h2');
+  h2.textContent = `${titre} · ${support}`;
+  const ligne = document.createElement('div');
+  ligne.className = 'ligne';
+  sortie.append(h2, ligne);
+  for (const pc of ETAPES) {
+    const c = document.createElement('canvas');
+    const ratio = img ? img.naturalWidth / img.naturalHeight : 0.7;
+    c.height = 380;
+    c.width = Math.round(380 * ratio);
+    const t0 = performance.now();
+    dessiner(c, img, { progression: pc / 100, support, graine: titre, rendu: CONFIG.rendu });
+    const ms = Math.round(performance.now() - t0);
+    const f = document.createElement('figure');
+    const cap = document.createElement('figcaption');
+    cap.textContent = `${pc} % · ${etape(CONFIG.rendu, pc / 100).nom} · ${ms} ms`;
+    f.append(c, cap);
+    ligne.append(f);
+  }
+}
+document.body.dataset.pret = '1';
+</script>
+</body>
+</html>

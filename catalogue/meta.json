@@ -1,0 +1,79 @@
+{
+  "version": "2026-10",
+  "genere": "2026-11-03T20:37:47.002Z",
+  "tranche": 1000,
+  "total": 59864,
+  "avecPage": 24105,
+  "sansPage": 35759,
+  "parNiveau": {
+    "0": 47264,
+    "1": 8985,
+    "2": 2169,
+    "3": 964,
+    "4": 362,
+    "5": 120
+  },
+  "parSupport": {
+    "peinture": 22650,
+    "sculpture": 8925,
+    "photographie": 2014,
+    "estampe": 26275
+  },
+  "parSupportNiveau": {
+    "peinture-0": 16584,
+    "peinture-1": 3708,
+    "peinture-2": 1450,
+    "peinture-3": 639,
+    "peinture-4": 200,
+    "peinture-5": 69,
+    "sculpture-0": 6305,
+    "sculpture-1": 1548,
+    "sculpture-2": 639,
+    "sculpture-3": 278,
+    "sculpture-4": 120,
+    "sculpture-5": 35,
+    "photographie-0": 1838,
+    "photographie-1": 55,
+    "photographie-2": 47,
+    "photographie-3": 32,
+    "photographie-4": 30,
+    "photographie-5": 12,
+    "estampe-0": 22537,
+    "estampe-1": 3674,
+    "estampe-2": 33,
+    "estampe-3": 15,
+    "estampe-4": 12,
+    "estampe-5": 4
+  },
+  "parSource": {
+    "met": 4655,
+    "nga": 28470,
+    "commons": 21443,
+    "enwiki": 1581,
+    "rijks": 3584,
+    "aic": 131
+  },
+  "seuils": {
+    "1": 2586,
+    "2": 9365,
+    "3": 27570,
+    "4": 87203,
+    "5": 277873
+  },
+  "musees": 2773,
+  "moisVues": [
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08",
+    "2026-09",
+    "2026-10"
+  ],
+  "provisoire": false
+}

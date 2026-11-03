@@ -1,0 +1,12 @@
+{
+  "name": "musee",
+  "private": true,
+  "type": "module",
+  "description": "Musée : restauration d'œuvres par sessions de concentration, écosystème Éclats.",
+  "scripts": {
+    "test": "node --test",
+    "dev": "node outils/serveur.mjs 4338",
+    "simulation": "node outils/simulation.mjs",
+    "fonction": "node outils/fonction.mjs"
+  }
+}

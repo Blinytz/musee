@@ -1,0 +1,51 @@
+name: deploy-pages
+
+# Publie l'application et le catalogue sur GitHub Pages. Un push fait par le
+# jeton du dépôt (commit mensuel du catalogue) ne déclenche aucun workflow :
+# d'où le déclenchement explicite à la fin du workflow du catalogue.
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [Catalogue]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests
+        run: node --test
+      # Seuls les fichiers servis partent : ni outils, ni tests, ni SQL.
+      - name: Assembler le site
+        run: |
+          mkdir _site
+          cp -r index.html manifest.json sw.js css js icons polices catalogue _site/
+          # Empreinte du déploiement : l'application la relit au retour au
+          # premier plan et se recharge seule quand elle change.
+          printf '{ "version": "%s" }\n' "$GITHUB_SHA" > _site/version.json
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

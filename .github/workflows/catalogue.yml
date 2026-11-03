@@ -1,0 +1,142 @@
+# Catalogue des œuvres, reconstruit chaque mois sans IA.
+#
+# 1. Extraction Wikidata (œuvres, artistes, musées classés).
+# 2. Pages vues : un job par mois manquant, au plus deux à la fois par
+#    politesse envers dumps.wikimedia.org (~6 Go par mois, lus en flux).
+# 3. Assemblage, commit de catalogue/ et de l'état (ids, pages vues), puis
+#    synchronisation de l'index minimal dans Supabase si le secret existe.
+#
+# Le commit mensuel du bot garde aussi le dépôt éveillé : GitHub coupe les
+# workflows programmés d'un dépôt resté 60 jours sans commit.
+
+name: Catalogue
+
+on:
+  schedule:
+    # Le 2 du mois : le dump du mois précédent paraît le 1er vers 5 h UTC.
+    - cron: '17 6 2 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: catalogue
+  cancel-in-progress: false
+
+jobs:
+  wikidata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      mois: ${{ steps.mois.outputs.mois }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Extraction Wikidata
+        run: node outils/catalogue/wikidata.mjs
+      - name: Mois de pages vues manquants
+        id: mois
+        run: echo "mois=$(node outils/catalogue/vues.mjs --liste-manquants)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wikidata
+          path: outils/catalogue/cache/wikidata.json
+          retention-days: 7
+
+  vues:
+    needs: wikidata
+    if: needs.wikidata.outputs.mois != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        mois: ${{ fromJson(needs.wikidata.outputs.mois) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Décompresseur parallèle
+        run: sudo apt-get install -y lbzip2
+      - uses: actions/download-artifact@v4
+        with:
+          name: wikidata
+          path: outils/catalogue/cache
+      - name: Pages vues ${{ matrix.mois }}
+        run: node outils/catalogue/vues.mjs ${{ matrix.mois }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vues-${{ matrix.mois }}
+          path: outils/catalogue/etat/vues/${{ matrix.mois }}.json
+          retention-days: 7
+
+  assembler:
+    needs: [wikidata, vues]
+    # Un mois de pages vues en échec ne bloque pas le catalogue : il est
+    # construit avec les mois disponibles, ramenés à 12, et marqué provisoire.
+    if: always() && needs.wikidata.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: wikidata
+          path: outils/catalogue/cache
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: vues-*
+          path: outils/catalogue/etat/vues
+          merge-multiple: true
+      # Réponses des API de musées (images, listings) : un mois suivant ne
+      # redemande que les œuvres nouvelles.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            outils/catalogue/cache/images
+            outils/catalogue/cache/sources
+          key: catalogue-api-${{ github.run_id }}
+          restore-keys: catalogue-api-
+      - name: Assemblage
+        # Le pare-feu du Met bloque vite : on avance de quelques milliers
+        # d'œuvres par mois, le cache garde le reste d'un passage à l'autre.
+        # Les images de l'Art Institute of Chicago sont bloquées par son
+        # pare-feu (Cloudflare) jusque dans un navigateur : source écartée tant
+        # que la variable de dépôt MUSEE_SOURCES ne la réactive pas.
+        env:
+          MET_PLAFOND: 4000
+          SOURCES: ${{ vars.MUSEE_SOURCES || 'rijks,met,nga' }}
+        run: node outils/catalogue/construire.mjs
+      - name: Commit
+        run: |
+          git config user.name "musee-catalogue[bot]"
+          git config user.email "musee-catalogue@users.noreply.github.com"
+          git add catalogue outils/catalogue/etat
+          if git diff --cached --quiet; then
+            echo "Aucun changement."
+          else
+            git commit -m "Catalogue $(date -u +%Y-%m)"
+            git push
+            # Un push fait avec GITHUB_TOKEN ne déclenche aucun workflow : la
+            # publication part de deploy-pages.yml, déclenché à la fin de
+            # celui-ci (workflow_run).
+          fi
+      - name: Synchronisation Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] && [ -n "$SUPABASE_URL" ]; then
+            node outils/catalogue/supabase-sync.mjs
+          else
+            echo "Secrets Supabase absents : synchronisation sautée."
+          fi

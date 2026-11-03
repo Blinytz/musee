@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "appId": "musee",
+  "displayName": "Musée",
+  "description": "Restaurer des œuvres réelles par des sessions de concentration, les exposer, faire grandir son musée dans le classement mondial.",
+  "lifecycle": "construction",
+  "ownership": {
+    "audience": "single-user",
+    "repositoryVisibility": "public",
+    "repository": "Blinytz/musee"
+  },
+  "data": {
+    "storage": [
+      "supabase",
+      "localStorage"
+    ],
+    "exportAvailable": true,
+    "productionMutationAllowed": false
+  },
+  "eclats": {
+    "mode": "shared",
+    "ledger": "canonical",
+    "balanceMigration": "not-planned"
+  },
+  "commands": {
+    "install": null,
+    "dev": "node outils/serveur.mjs 4338",
+    "test": "node --test",
+    "build": "node outils/fonction.mjs",
+    "lint": null
+  },
+  "integration": {
+    "contractVersion": 1,
+    "status": "connected",
+    "adapter": "js/donnees/registre.js"
+  }
+}
