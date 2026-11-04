@@ -4,6 +4,7 @@ import { h, icone, pourcent, siecleTexte, ajouter, majuscule } from './dom.js';
 import { effets, siecle } from '../moteur/regles.js';
 import { dessiner, chargerImage } from '../rendu/restauration.js';
 import { urlImage, urlSecours, ratio } from '../rendu/images.js';
+import { empreinte } from '../moteur/alea.js';
 
 /* ---------- Annonces ---------- */
 
@@ -199,32 +200,81 @@ export function peindrePlusTard(element, tache) {
 }
 
 /**
- * Vignette d'œuvre : toile, niveau, titre. `infos` : { id, fiche, oeuvre,
- * progression, niveau, support, titre, sous, onclick, coin }.
+ * L'œuvre dans son cadre : doré pour une peinture, baguette et passe-partout
+ * pour une estampe ou une photographie, socle pour une sculpture. Avec
+ * `hauteur`, le cadre a une taille fixe (la largeur suit les proportions de
+ * l'image, bornée par `largeurMax`) ; sans, il remplit son conteneur.
+ */
+export function cadreOeuvre(app, { id, fiche, oeuvre, support, progression, hauteur = null, largeurMax = Infinity, cote = 360 }) {
+  const s = support || oeuvre?.support || fiche?.support || 'peinture';
+  const r = ratio(fiche);
+  const c = h('div.cadre', { classe: `cadre-${s}` });
+  if (hauteur) {
+    let H = hauteur;
+    let W = H * r;
+    if (W > largeurMax) { W = largeurMax; H = W / r; }
+    c.style.width = `${Math.round(W)}px`;
+    c.style.height = `${Math.round(H)}px`;
+  } else {
+    c.classList.add('fluide');
+    c.style.setProperty('--r', r);
+  }
+  peindrePlusTard(c, () => peindre(app, c, {
+    fiche, oeuvre, progression: progression ?? oeuvre?.progression ?? 1, id, support: s, cote, remplir: true,
+  }));
+  return c;
+}
+
+/**
+ * Vignette d'œuvre : la toile encadrée sur un pan de mur, niveau, titre.
+ * `infos` : { id, fiche, oeuvre, progression, niveau, support, titre, sous,
+ * onclick, coin }.
  */
 export function vignette(app, infos) {
   const { id, fiche, oeuvre, onclick } = infos;
   const progression = infos.progression ?? oeuvre?.progression ?? 0;
   const niveau = infos.niveau ?? oeuvre?.niveau ?? fiche?.niveau ?? 0;
-  const toile = h('div.toile', h('span.tres-discret', '…'));
-  const el = h('button.vignette', { type: 'button', onclick },
-    toile,
+  return h('button.vignette', { type: 'button', onclick },
+    h('div.toile', cadreOeuvre(app, { id, fiche, oeuvre, progression, support: infos.support ?? oeuvre?.support, cote: 360 })),
     h('div.coin', puceNiveau(app.jeu.cfg, niveau), infos.coin),
     progression > 0 && progression < 1 ? h('span.pourcent', pourcent(progression)) : null,
     h('div.cartel',
       h('div.titre', infos.titre ?? (oeuvre ? cartel(app, oeuvre, fiche).titre : fiche?.titre) ?? '?'),
       infos.sous !== undefined ? h('div.sous', infos.sous) : null));
-  peindrePlusTard(toile, () => peindre(app, toile, {
-    fiche, oeuvre, progression, id, support: infos.support ?? oeuvre?.support, cote: 360,
-  }));
-  return el;
 }
 
-/** Miniature carrée pour le plan des salles. */
+/** Miniature carrée (listes de choix). */
 export function miniature(app, { id, fiche, oeuvre }) {
   const boite = h('div', { style: { width: '100%', height: '100%' } });
   peindrePlusTard(boite, () => peindre(app, boite, {
     fiche, oeuvre, progression: oeuvre?.progression ?? 1, id, support: oeuvre?.support, cote: 200, remplir: true,
   }));
   return boite;
+}
+
+/* ---------- Murs ---------- */
+
+// Couleurs de cimaise : bordeaux, sauge, bleu de Prusse, terre d'ombre,
+// prune, vert bouteille, sienne brûlée, ardoise. Une salle à thème garde la
+// couleur de son thème ; sans thème, elle suit son rang.
+const MURS = ['#5e1d22', '#3f4d3d', '#1f3346', '#5a3a1e', '#3e2433', '#23392f', '#6e3121', '#33383d'];
+
+export function couleurMur(espace, rang = 0) {
+  if (espace?.theme) return MURS[empreinte(`${espace.theme.type}:${espace.theme.valeur}`) % MURS.length];
+  return MURS[rang % MURS.length];
+}
+
+/* ---------- Portraits ---------- */
+
+// La bibliothèque pèse ~370 Ko : elle ne se charge qu'à la première fiche.
+let portraits = null;
+
+/** Portrait dessiné d'un membre du personnel, toujours le même pour une graine. */
+export function portrait(graine, classe = '') {
+  const el = h('span.portrait', { classe, 'aria-hidden': 'true' });
+  portraits ??= import('../vendor/portraits.js');
+  portraits.then((m) => {
+    el.innerHTML = m.portrait(String(graine), { backgroundColor: ['ead9bd', 'e3cfae', 'efe0c4', 'dcc9a8', 'e8d3c4'] });
+  }).catch(() => {});
+  return el;
 }

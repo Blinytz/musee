@@ -1,7 +1,7 @@
 // Personnel : l'équipe, les candidats de la semaine, les salles ouvertes.
 
 import { h, icone, nombre, ajouter } from '../dom.js';
-import { confirmer, jauge } from '../composants.js';
+import { confirmer, jauge, portrait } from '../composants.js';
 import {
   avecNiveaux, salaireHoraire, effetTexte, fraisRecrutement, masseSalariale, role, rolesOuverts, minutesPourNiveau, refusRole, arrieresBloquants,
 } from '../../moteur/personnel.js';
@@ -53,7 +53,7 @@ export async function afficher(app, vue) {
 function carteEmploye(app, cfg, e, m) {
   const prochain = m.niveau < cfg.personnel.niveauMax ? minutesPourNiveau(cfg, m.niveau + 1) : null;
   const bas = minutesPourNiveau(cfg, m.niveau);
-  return h('div.carte.pile', { style: { gap: '6px' } },
+  return h('div.carte.fiche-employe', portrait(m.nom), h('div.pile',
     h('div.ligne.espace',
       h('div', { style: { minWidth: 0 } }, h('b', m.nom), h('div.tres-discret', effetTexte(cfg, m))),
       h('span.puce', `Niv. ${m.niveau}`)),
@@ -67,14 +67,14 @@ function carteEmploye(app, cfg, e, m) {
         if (!(await confirmer(`Licencier ${m.nom} ?`, { oui: 'Licencier', danger: true }))) return;
         await app.agir('licencier', { employe: m.id });
       },
-    }, 'Licencier'));
+    }, 'Licencier')));
 }
 
 function carteCandidat(app, cfg, e, c, bloque) {
   const frais = fraisRecrutement(cfg, e, c);
   const r = role(cfg, c.role);
   const trop = app.solde !== null && app.solde < frais;
-  return h('div.carte.pile', { style: { gap: '6px' } },
+  return h('div.carte.fiche-employe', portrait(c.nom), h('div.pile',
     h('div.ligne.espace',
       h('div', { style: { minWidth: 0 } }, h('b', c.nom), h('div.discret', r?.nom)),
       h('span.puce', `Niv. ${c.niveau}`)),
@@ -87,5 +87,5 @@ function carteCandidat(app, cfg, e, c, bloque) {
           if (!(await confirmer(`Embaucher ${c.nom} ?`, { texte: `${r?.nom} · ${nombre(frais)} ✦`, oui: 'Embaucher' }))) return;
           await app.agir('embaucher', { candidat: c.id }, { succes: `${c.nom} rejoint l'équipe` });
         },
-      }, bloque ? 'Arriérés' : `Embaucher · ${nombre(frais)} ✦`)));
+      }, bloque ? 'Arriérés' : `Embaucher · ${nombre(frais)} ✦`))));
 }

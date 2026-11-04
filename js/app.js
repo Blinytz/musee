@@ -14,7 +14,9 @@ const PAGES = {
   atelier: () => import('./ui/pages/atelier.js'),
   arrivages: () => import('./ui/pages/arrivages.js'),
   classement: () => import('./ui/pages/classement.js'),
-  plus: () => import('./ui/pages/plus.js'),
+  direction: () => import('./ui/pages/direction.js'),
+  // Ancienne adresse du menu, gardée pour les notifications déjà envoyées.
+  plus: () => import('./ui/pages/direction.js'),
   reserve: () => import('./ui/pages/reserve.js'),
   privee: () => import('./ui/pages/reserve.js'),
   investir: () => import('./ui/pages/investir.js'),
@@ -31,10 +33,9 @@ const ONGLETS = [
   { route: 'musee', nom: 'Musée', icone: 'musee' },
   { route: 'atelier', nom: 'Atelier', icone: 'atelier' },
   { route: 'arrivages', nom: 'Arrivages', icone: 'arrivages' },
-  { route: 'classement', nom: 'Classement', icone: 'classement' },
-  { route: 'plus', nom: 'Plus', icone: 'plus' },
+  { route: 'direction', nom: 'Direction', icone: 'direction' },
 ];
-const SOUS_PAGES_PLUS = ['plus', 'reserve', 'privee', 'investir', 'expositions', 'rapport', 'historique', 'reglages', 'personnel', 'securite'];
+const SOUS_PAGES_DIRECTION = ['direction', 'plus', 'reserve', 'privee', 'investir', 'expositions', 'rapport', 'historique', 'reglages', 'personnel', 'securite', 'classement'];
 
 const parametresUrl = new URLSearchParams(location.search);
 const demo = parametresUrl.has('demo');
@@ -103,10 +104,11 @@ function majEntete() {
   entete.hidden = false;
   navigation.hidden = false;
   const visiteurs = visiteursDuJour(jeu.cfg, e, jeu.jour());
+  const rang = e.classement?.rang;
   vider(entete,
-    h('div.entete-nom',
+    h('a.entete-nom', { href: '#/classement' },
       h('h1', e.nom),
-      h('div.entete-statut', `${jeu.cfg.statuts[e.statut].nom} · ${nombre(visiteurs)} visiteurs/j`)),
+      h('div.entete-statut', [`${nombre(visiteurs)} visiteurs/j`, `réputation ${Math.round(e.reputation)}`, rang ? `${nombre(rang)}e` : null].filter(Boolean).join(' · '))),
     h('button.solde', { type: 'button', onclick: () => app.naviguer('historique'), 'aria-label': 'Solde d\'Éclats' },
       solde === null ? '?' : nombre(solde)));
   majNavigation();
@@ -118,9 +120,9 @@ function majNavigation() {
   const arrivagesNeufs = e ? e.arrivages.reduce((n, a) => n + a.oeuvres.filter((o) => !o.achetee).length, 0) : 0;
   const demandes = e?.prets?.demande ? 1 : 0;
   vider(navigation, ONGLETS.map((o) => {
-    const actif = o.route === route || (o.route === 'plus' && SOUS_PAGES_PLUS.includes(route))
+    const actif = o.route === route || (o.route === 'direction' && SOUS_PAGES_DIRECTION.includes(route))
       || (o.route === 'musee' && route === 'oeuvre');
-    const pastille = o.route === 'arrivages' ? arrivagesNeufs : o.route === 'plus' ? demandes : 0;
+    const pastille = o.route === 'arrivages' ? arrivagesNeufs : o.route === 'direction' ? demandes : 0;
     return h('a', { href: `#/${o.route}`, classe: actif ? 'actif' : '' },
       icone(o.icone), o.nom, pastille ? h('span.pastille', pastille) : null);
   }));
@@ -141,6 +143,7 @@ async function afficherRoute({ garderDefilement = false } = {}) {
   nettoyage = null;
   const module = await PAGES[nom]();
   if (jeton !== jetonRoute) return;
+  document.body.dataset.route = nom;
   vider(vue);
   if (!garderDefilement) window.scrollTo(0, 0);
   try {
@@ -151,6 +154,16 @@ async function afficherRoute({ garderDefilement = false } = {}) {
   }
   if (garderDefilement) window.scrollTo(0, defilement);
   majNavigation();
+  majCouleurTheme();
+}
+
+// La barre d'état du téléphone prend la couleur du haut de l'écran : le mur
+// de la première salle au musée, le papier crème ailleurs.
+function majCouleurTheme() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const mur = document.body.dataset.route === 'musee' ? document.body.style.getPropertyValue('--mur-entete') : '';
+  meta.content = mur || '#f6ecd9';
 }
 
 // Après chaque changement d'état, la page courante se redessine en gardant
@@ -172,7 +185,7 @@ function ecranConnexion(erreur) {
   navigation.hidden = true;
   const email = h('input', { type: 'email', autocomplete: 'username', required: true, placeholder: 'Adresse' });
   const mdp = h('input', { type: 'password', autocomplete: 'current-password', required: true, placeholder: 'Mot de passe' });
-  const bouton = h('button.bouton.primaire.plein', { type: 'submit' }, 'Se connecter');
+  const bouton = h('button.bouton.or.plein', { type: 'submit' }, 'Se connecter');
   const formulaire = h('form.pile', {
     onsubmit: async (ev) => {
       ev.preventDefault();
@@ -186,22 +199,20 @@ function ecranConnexion(erreur) {
       }
     },
   }, email, mdp, bouton);
-  vider(vue, h('div.pile', { style: { marginTop: '12vh' } },
-    h('div', { style: { textAlign: 'center' } },
-      h('img', { src: './icons/icone.svg', alt: '', width: 72, height: 72, style: { borderRadius: '16px' } }),
-      h('h1', { style: { marginTop: '12px' } }, 'Musée')),
+  vider(vue, h('div.accueil', h('div.pile', { style: { gap: '14px' } },
+    h('div.plaque', 'Musée'),
     erreur ? h('p.discret', { style: { textAlign: 'center' } }, erreur) : null,
     formulaire,
-    h('a.tres-discret', { href: '?demo', style: { textAlign: 'center' } }, 'Démonstration')));
+    h('a.tres-discret', { href: '?demo', style: { textAlign: 'center' } }, 'Démonstration'))));
 }
 
 function ecranCreation() {
   entete.hidden = true;
   navigation.hidden = true;
   const nom = h('input', { type: 'text', maxlength: 60, required: true, placeholder: 'Nom du musée', autocomplete: 'off' });
-  const bouton = h('button.bouton.primaire.plein', { type: 'submit' }, 'Ouvrir');
-  vider(vue, h('form.pile', {
-    style: { marginTop: '14vh' },
+  const bouton = h('button.bouton.or.plein', { type: 'submit' }, 'Ouvrir');
+  vider(vue, h('div.accueil', h('form.pile', {
+    style: { gap: '14px' },
     onsubmit: async (ev) => {
       ev.preventDefault();
       if (!nom.value.trim()) return;
@@ -214,8 +225,8 @@ function ecranCreation() {
       } else bouton.disabled = false;
     },
   },
-  h('h1', { style: { textAlign: 'center' } }, 'Votre musée'),
-  nom, bouton));
+  h('div.plaque', 'Votre musée'),
+  nom, bouton)));
   nom.focus();
 }
 
@@ -360,7 +371,7 @@ verifierVersion();
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   installation = e;
-  if (routeCourante().nom === 'plus' || routeCourante().nom === 'reglages') afficherRoute();
+  if (['direction', 'plus', 'reglages'].includes(routeCourante().nom)) afficherRoute();
 });
 
 if ('serviceWorker' in navigator && !demo && location.protocol === 'https:') {

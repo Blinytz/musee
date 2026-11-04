@@ -1,4 +1,5 @@
-// Arrivages : œuvres proposées chaque lundi, à 0 % de restauration.
+// Arrivages : œuvres proposées chaque lundi, à 0 % de restauration. Elles
+// arrivent en caisses, que l'on ouvre une à une.
 
 import { h, icone, nombre, dateJour, siecleTexte, ajouter } from '../dom.js';
 import { vignette, puceNiveau } from '../composants.js';
@@ -24,16 +25,67 @@ export async function afficher(app, vue) {
     return;
   }
 
+  const ouvertes = lireOuvertes();
   for (const a of arrivages) {
     const fiches = await app.catalogue.fiches(a.oeuvres.map((o) => o.id));
     const reste = a.expire - jour;
-    ajouter(vue, 
-      h('div.ligne.espace', { style: { margin: '14px 2px 8px' } },
-        h('b', a.premier ? 'Premier arrivage' : `Arrivage du ${dateJour(a.jour)}`),
+    const cases = a.oeuvres.map((ligne, i) => {
+      const cle = `${a.id}:${ligne.id}`;
+      const ouverte = () => carte(app, e, cfg, a, ligne, fiches[i], revele, libre);
+      if (ligne.achetee || ouvertes.has(cle)) return ouverte();
+      return caisse(cfg, ligne, fiches[i], cle, ouverte);
+    });
+    const fermees = cases.filter((c) => c.classList.contains('caisse'));
+    ajouter(vue,
+      h('div.ligne.espace', { style: { margin: '18px 2px 10px' } },
+        h('h3', a.premier ? 'Premier arrivage' : `Arrivage du ${dateJour(a.jour)}`),
         h('span.tres-discret', reste <= 1 ? 'Dernier jour' : `${reste} jours`)),
-      h('div.grille', a.oeuvres.map((ligne, i) => carte(app, e, cfg, a, ligne, fiches[i], revele, libre))),
+      h('div.caisses', cases),
+      fermees.length > 1 ? h('button.bouton.plein', {
+        type: 'button', style: { marginTop: '12px' },
+        onclick: (ev) => { ev.currentTarget.remove(); fermees.forEach((c, k) => setTimeout(() => c.click(), k * 120)); },
+      }, 'Tout ouvrir') : null,
     );
   }
+}
+
+/* ---------- Caisses ---------- */
+
+const CLE_CAISSES = 'musee_caisses';
+
+function lireOuvertes() {
+  try { return new Set(JSON.parse(localStorage.getItem(CLE_CAISSES) || '[]')); } catch { return new Set(); }
+}
+
+function noterOuverte(cle) {
+  const liste = [...lireOuvertes(), cle].slice(-300);
+  try { localStorage.setItem(CLE_CAISSES, JSON.stringify(liste)); } catch { /* stockage indisponible */ }
+}
+
+/** Caisse fermée : l'étiquette dit le niveau, le support et le siècle. */
+function caisse(cfg, ligne, fiche, cle, ouverte) {
+  const support = cfg.supports.find((s) => s.id === ligne.support)?.nom || ligne.support;
+  const sc = siecle(fiche?.an);
+  const el = h('button.caisse', {
+    type: 'button',
+    'aria-label': `Ouvrir la caisse · ${support}`,
+    onclick: () => {
+      if (el.classList.contains('ouvre')) return;
+      noterOuverte(cle);
+      el.classList.add('ouvre');
+      setTimeout(() => {
+        const contenu = ouverte();
+        contenu.classList.add('deballee');
+        el.replaceWith(contenu);
+      }, 420);
+    },
+  },
+  h('span.caisse-etiquette',
+    h('span.fragile', 'FRAGILE'),
+    puceNiveau(cfg, ligne.niveau),
+    h('span', `${support} · ${sc !== null ? siecleTexte(sc) : '?'}`),
+    ligne.offerte ? h('span', { style: { color: 'var(--vert)' } }, 'Offerte') : null));
+  return el;
 }
 
 function carte(app, e, cfg, a, ligne, fiche, revele, libre) {
@@ -62,7 +114,7 @@ function carte(app, e, cfg, a, ligne, fiche, revele, libre) {
     onclick: () => {},
   });
   v.style.cursor = 'default';
-  return h('div.pile', { style: { gap: '6px' } }, v, bouton);
+  return h('div.pile', { style: { gap: '8px' } }, v, bouton);
 }
 
 export { puceNiveau };

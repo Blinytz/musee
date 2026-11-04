@@ -66,11 +66,11 @@ export function annoncerStatut(app, statut) {
   const fermer = () => racine.remove();
   const racine = h('div.voile-fond', { style: { alignItems: 'center' }, onclick: (ev) => { if (ev.target === racine) fermer(); } },
     h('div.facade.annonce-statut', { classe: `statut-${statut}`, role: 'dialog', 'aria-label': 'Nouveau statut' },
-      h('div.tres-discret', 'Nouveau statut'),
-      h('div.statut-nom', cfg.statuts[statut].nom),
+      h('div.tres-discret', { style: { color: 'var(--creme-2)' } }, 'Nouveau statut'),
+      h('div.plaque', cfg.statuts[statut].nom),
       h('div.pile', { style: { gap: '6px', margin: '14px 0 18px' } },
         debloques(cfg, statut).split(' · ').filter(Boolean).map((t) => h('div.ligne', icone('valider'), t))),
-      h('button.bouton.primaire.plein', { type: 'button', onclick: () => { fermer(); app.naviguer('musee'); } }, 'Voir le musée')));
+      h('button.bouton.or.plein', { type: 'button', onclick: () => { fermer(); app.naviguer('musee'); } }, 'Voir le musée')));
   document.body.append(racine);
 }
 

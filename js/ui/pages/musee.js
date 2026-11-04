@@ -1,13 +1,14 @@
-// Écran Musée : façade et statut, chiffres du jour, billet, plan des ailes et
-// des salles, accrochage par glisser-déposer.
+// Écran Musée : les salles comme des murs peints, les œuvres accrochées
+// dans leurs cadres, la réserve à accrocher, et la carte « Restaurer »
+// toujours à portée de pouce. Accrochage par glisser-déposer.
 
-import { h, vider, icone, nombre, grand, pourcent, siecleTexte, ajouter, majuscule } from '../dom.js';
-import { feuille, miniature, puceNiveau, jauge, tenter, annoncer, messageErreur } from '../composants.js';
-import { espacesPublics, contenuEspace, refusAccrochage, placesPubliques } from '../../moteur/batiment.js';
-import { visiteursDuJour, effetCampagnes, espacesOuverts } from '../../moteur/visiteurs.js';
-import { risqueMaximal } from '../../moteur/securite.js';
-import { masseSalariale } from '../../moteur/personnel.js';
-import { frequentationAnnualisee, estConforme, valeurTheme, prixOptimal } from '../../moteur/regles.js';
+import { h, vider, icone, siecleTexte, ajouter, majuscule, pourcent } from '../dom.js';
+import { feuille, miniature, puceNiveau, annoncer, messageErreur, cadreOeuvre, couleurMur, peindre, cartel } from '../composants.js';
+import { espacesPublics, contenuEspace, refusAccrochage } from '../../moteur/batiment.js';
+import { espacesOuverts } from '../../moteur/visiteurs.js';
+import { estConforme, valeurTheme, niveau, niveauMaitrise } from '../../moteur/regles.js';
+import { etape } from '../../rendu/restauration.js';
+import { choisirDuree } from './atelier.js';
 
 export async function afficher(app, vue) {
   const { jeu } = app;
@@ -18,121 +19,128 @@ export async function afficher(app, vue) {
   const ids = Object.keys(e.oeuvres).map(Number);
   (await app.catalogue.fiches(ids)).forEach((f, i) => fiches.set(ids[i], f));
 
-  ajouter(vue, 
-    facade(app, e, cfg),
-    chiffres(app, e, cfg, jour),
+  ajouter(vue,
     plan(app, e, cfg, fiches, jour, espacesOuverts(cfg, e, jour)),
+    carteRestaurer(app, e, cfg, fiches),
   );
   return activerGlisser(app, vue);
 }
 
-function facade(app, e, cfg) {
-  const annualisee = frequentationAnnualisee(cfg, e.historique);
-  const suivant = cfg.statuts[e.statut + 1];
-  return h('div.facade', { classe: `statut-${e.statut}` },
-    h('div.tres-discret', 'Statut'),
-    h('div.statut-nom', cfg.statuts[e.statut].nom),
-    h('div.prochain',
-      h('div.ligne.espace', h('span', `${grand(annualisee)} visiteurs par an`),
-        suivant ? h('span', grand(suivant.seuil)) : null),
-      suivant ? jauge(annualisee / suivant.seuil) : null,
-      suivant ? h('span', suivant.nom) : null));
-}
-
-function chiffres(app, e, cfg, jour) {
-  const v = visiteursDuJour(cfg, e, jour);
-  const hier = e.historique[e.historique.length - 1];
-  const campagne = effetCampagnes(cfg, e, jour) > 1 ? cfg.campagnes.find((c) => c.id === e.campagne.id) : null;
-  const billet = h('div.chiffre',
-    h('span', icone('billet'), 'Billet'),
-    h('div.ligne', { style: { justifyContent: 'space-between' } },
-      h('button.bouton.petit.icone-seule', { type: 'button', 'aria-label': 'Baisser le prix', disabled: e.prixBillet <= 0, onclick: () => app.agir('fixerPrix', e.prixBillet - 1) }, icone('retirer')),
-      h('b', e.prixBillet === 0 ? 'Gratuit' : `${e.prixBillet} ✦`),
-      h('button.bouton.petit.icone-seule', { type: 'button', 'aria-label': 'Augmenter le prix', disabled: e.prixBillet >= cfg.visiteurs.prix.max, onclick: () => app.agir('fixerPrix', e.prixBillet + 1) }, icone('ajouter'))),
-    h('small', `Optimal ${prixOptimal(cfg, e.reputation).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ✦`));
-  return h('div.chiffres', { style: { marginTop: '10px' } },
-    h('div.chiffre', h('span', icone('visiteurs'), 'Visiteurs par jour'), h('b', nombre(v)),
-      hier ? h('small', `Hier ${nombre(hier.visiteurs)}`) : null,
-      campagne ? h('small', { style: { color: 'var(--accent)' } }, ` · ${campagne.nom}`) : null),
-    h('div.chiffre', h('span', icone('reputation'), 'Réputation'), h('b', Math.round(e.reputation)),
-      h('small', `Satisfaction ${Math.round(e.satisfaction)}`)),
-    billet,
-    h('div.chiffre', h('span', icone('visiteurs'), 'Places'), h('b', nombre(placesPubliques(e))),
-      h('small', `Densité ${placesPubliques(e) ? Math.round(v / placesPubliques(e)) : 0}`)),
-    h('a.chiffre', { href: '#/personnel', style: { textDecoration: 'none', color: 'inherit' } },
-      h('span', icone('visiteurs'), 'Personnel'), h('b', nombre(e.personnel?.employes.length || 0)),
-      h('small', `${masseSalariale(cfg, e).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ✦/h`)),
-    h('a.chiffre', { href: '#/securite', style: { textDecoration: 'none', color: 'inherit' } },
-      h('span', icone('privee'), 'Sécurité'),
-      h('b', { style: { color: risqueMaximal(cfg, e, jour) > 0.05 ? 'var(--rouge)' : null } },
-        `${(risqueMaximal(cfg, e, jour) * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`),
-      h('small', 'pire risque par semaine')));
-}
-
 /* ---------- Plan ---------- */
+
+// Hauteur d'accrochage selon le niveau : un trésor domine le mur.
+const hauteurCadre = (n) => 76 + 14 * (n || 0);
 
 function plan(app, e, cfg, fiches, jour, ouverture) {
   const racine = h('div');
   const espaces = espacesPublics(e);
+  const largeurMax = Math.min(680, window.innerWidth || 390) - 70;
+  let rang = 0;
+  const murs = [];
   for (let a = 1; a <= e.batiment.ailes; a++) {
     const salles = espaces.filter((s) => s.type === 'salle' && s.aile === a);
-    ajouter(racine, h('div.aile',
-      h('div.aile-titre', `Aile ${a}`),
-      salles.length ? salles.map((s) => salle(app, e, cfg, s, fiches, ouverture)) : h('div.vide', { style: { padding: '12px' } },
-        h('a', { href: '#/investir' }, 'Ajouter une salle'))));
+    if (e.batiment.ailes > 1) murs.push(h('div.aile-titre', `Aile ${a}`));
+    if (salles.length) {
+      for (const s of salles) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax));
+    } else {
+      murs.push(h('section.mur', { style: { '--mur': couleurMur(null, rang++) } },
+        h('div.mur-vide', h('a.bouton.or.petit', { href: '#/investir' }, icone('ajouter'), 'Nouvelle salle'))));
+    }
   }
-  const speciaux = espaces.filter((s) => s.type !== 'salle');
-  if (speciaux.length) {
-    ajouter(racine, h('div.aile', h('div.aile-titre', 'Espaces'), speciaux.map((s) => salle(app, e, cfg, s, fiches, ouverture))));
-  }
-  const x = e.expositions.courante;
+  for (const s of espaces.filter((x) => x.type !== 'salle')) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax));
   if (e.batiment.exposition) {
-    ajouter(racine, h('div.aile', h('div.aile-titre', 'Exposition temporaire'),
-      h('a.salle', { href: '#/expositions', style: { display: 'block', textDecoration: 'none', color: 'inherit' } },
-        x ? [h('h3', x.theme.libelle), h('div.tres-discret', `${x.oeuvres.length + x.emprunts.length} œuvres · ${x.fin - jour} j restants`)]
-          : h('div.tres-discret', 'Aucune exposition en cours'))));
+    const x = e.expositions.courante;
+    murs.push(h('section.mur', { style: { '--mur': '#1f1a17' } },
+      h('div.mur-vide',
+        h('a.plaque', { href: '#/expositions' },
+          x ? x.theme.libelle : 'Exposition temporaire',
+          h('small', x ? `${x.oeuvres.length + x.emprunts.length} œuvres · ${x.fin - jour} j` : 'Aucune en cours')))));
   }
-  ajouter(racine, bac(app, e, cfg, fiches));
-  return h('div', h('div.section', h('h2', 'Salles')), racine);
+  // Le premier mur donne sa couleur à l'en-tête et à la barre d'état.
+  const premier = murs.find((m) => m.classList.contains('mur'));
+  if (premier) {
+    premier.classList.add('premier');
+    document.body.style.setProperty('--mur-entete', premier.style.getPropertyValue('--mur'));
+  }
+  ajouter(racine, murs, bac(app, e, cfg, fiches));
+  return racine;
 }
 
-function salle(app, e, cfg, s, fiches, ouverture) {
+function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax) {
   const contenu = contenuEspace(e, s.id);
   const theme = s.theme;
   const conformes = contenu.filter((id) => id !== null && estConforme(e.oeuvres[id], theme)).length;
   const garnies = contenu.filter((id) => id !== null).length;
   const fermee = ouverture?.fermes.includes(s.id);
-  return h('div.salle', { dataset: { espace: s.id }, classe: fermee ? 'fermee' : '' },
-    h('div.salle-tete',
-      h('h3', s.nom || cfg.espaces[s.type]?.nom || s.id),
-      fermee ? h('a.puce', { href: '#/personnel', style: { background: 'rgba(255,116,102,0.18)', color: 'var(--rouge)', textDecoration: 'none' } }, 'Fermée') : null,
-      h('button.puce', { type: 'button', onclick: () => choisirTheme(app, e, cfg, s) },
-        theme ? `${theme.libelle}${garnies ? ` · ${conformes}/${garnies}` : ''}` : 'Sans thème'),
-      h('span.tres-discret', `${garnies}/${s.places}`)),
-    h('div.places', contenu.map((id, i) => {
+  return h('section.mur', { dataset: { espace: s.id }, classe: fermee ? 'fermee' : '', style: { '--mur': couleurMur(s, rang) } },
+    h('div.accrochage', contenu.map((id, i) => {
       const o = id !== null ? e.oeuvres[id] : null;
+      const hors = o && theme && !estConforme(o, theme);
       return h('button.place', {
         type: 'button',
-        classe: o ? 'occupee' : '',
+        classe: o ? 'occupee' : 'libre',
+        style: o ? null : { width: '50px', height: '64px' },
         dataset: { espace: s.id, place: i, ...(o ? { oeuvre: id } : {}) },
         'aria-label': o ? o.titre : 'Place libre',
         onclick: () => (o ? app.naviguer(`oeuvre/${id}`) : choisirOeuvre(app, e, cfg, s, i, fiches)),
-      }, o ? [miniature(app, { id, fiche: fiches.get(id), oeuvre: o }), theme && !estConforme(o, theme) ? h('span.hors-theme') : null]
+      }, o ? [cadreOeuvre(app, { id, fiche: fiches.get(id), oeuvre: o, hauteur: hauteurCadre(o.niveau), largeurMax, cote: 400 }), hors ? h('span.hors-theme') : null]
         : icone('ajouter'));
-    })));
+    })),
+    h('div.mur-pied',
+      h('button.plaque', { type: 'button', onclick: () => choisirTheme(app, e, cfg, s) },
+        s.nom || cfg.espaces[s.type]?.nom || s.id,
+        h('small', [theme ? theme.libelle : 'Sans thème', theme && garnies ? `${conformes}/${garnies}` : null].filter(Boolean).join(' · '))),
+      h('span.puce', `${garnies}/${s.places}`),
+      fermee ? h('a.puce.alerte', { href: '#/personnel' }, 'Fermée') : null));
 }
 
 /** Œuvres restaurées disponibles pour l'accrochage, glissables vers une place. */
 function bac(app, e, cfg, fiches) {
   const libres = Object.values(e.oeuvres).filter((o) => o.progression >= 1 && (o.lieu === 'reserve' || o.lieu === 'privee' || o.lieu === 'atelier'));
-  return h('div', { style: { marginTop: '6px' } },
-    h('div.section', h('h3', 'À accrocher'), h('span.aside', libres.length)),
-    h('div.bac', { dataset: { bac: '1' } },
+  return h('section.mur.reserve-mur', { style: { '--mur': '#2a1d17' } },
+    h('div.bac-titre', h('span', 'À accrocher'), h('span', libres.length)),
+    h('div.bac', { dataset: { bac: '1' }, classe: libres.length ? '' : 'vide-bac' },
       libres.length ? libres.map((o) => h('button.place.occupee', {
         type: 'button', dataset: { oeuvre: o.id, origine: o.lieu }, 'aria-label': o.titre,
         onclick: () => app.naviguer(`oeuvre/${o.id}`),
-      }, miniature(app, { id: o.id, fiche: fiches.get(o.id), oeuvre: o })))
-        : h('div.tres-discret', { style: { padding: '14px 4px' } }, 'Réserve vide')));
+      }, cadreOeuvre(app, { id: o.id, fiche: fiches.get(o.id), oeuvre: o, hauteur: 70, largeurMax: 120, cote: 240 })))
+        : h('div.tres-discret', { style: { color: 'var(--creme-2)' } }, 'Rien à accrocher')));
+}
+
+/* ---------- Restaurer ---------- */
+
+/**
+ * L'œuvre en cours à l'atelier, sa progression, et de quoi lancer une
+ * session en deux appuis. Sans œuvre en cours : le chemin vers l'atelier
+ * ou les arrivages.
+ */
+function carteRestaurer(app, e, cfg, fiches) {
+  const enAtelier = Object.values(e.oeuvres).filter((o) => o.lieu === 'atelier');
+  const o = enAtelier.filter((x) => x.progression < 1).sort((a, b) => b.progression - a.progression)[0];
+  if (!o) {
+    const aRestaurer = Object.values(e.oeuvres).some((x) => x.lieu === 'reserve' && x.progression < 1);
+    return h('div.restaurer',
+      h('div.restaurer-toile', { style: { display: 'grid', placeItems: 'center', color: 'var(--creme-2)' } }, icone('atelier')),
+      h('div.restaurer-texte', h('b', 'Atelier libre')),
+      aRestaurer
+        ? h('a.bouton.primaire', { href: '#/atelier' }, 'Choisir')
+        : h('a.bouton.primaire', { href: '#/arrivages' }, 'Arrivages'));
+  }
+  const fiche = fiches.get(o.id);
+  const toile = h('div.restaurer-toile');
+  peindre(app, toile, { fiche, oeuvre: o, progression: o.progression, id: o.id, support: o.support, cote: 160, remplir: true });
+  const requise = niveau(cfg, o.niveau).maitrise;
+  const actuelle = niveauMaitrise(cfg, e.maitrise[o.support] || 0);
+  const bloque = actuelle < requise;
+  return h('div.restaurer',
+    toile,
+    h('div.restaurer-texte',
+      h('b', cartel(app, o, fiche).titre),
+      h('div.ligne', h('div.jauge', h('i', { style: { width: `${o.progression * 100}%` } })), h('span', pourcent(o.progression))),
+      h('div.tres-discret', { style: { fontSize: '12px', marginTop: '2px' } }, bloque ? `Maîtrise ${requise} requise` : etape(cfg.rendu, o.progression).nom)),
+    bloque
+      ? h('a.bouton', { href: '#/atelier' }, 'Atelier')
+      : h('button.bouton.primaire', { type: 'button', disabled: !!e.session, onclick: () => choisirDuree(app, o) }, 'Restaurer'));
 }
 
 /* ---------- Choix ---------- */
@@ -321,4 +329,3 @@ function activerGlisser(app, racine) {
   };
 }
 
-export { pourcent, tenter };

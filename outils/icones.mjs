@@ -60,6 +60,10 @@ const ICONES = {
   telecharger: ['regular', 'upload-simple'],
   retour: ['regular', 'arrow-counter-clockwise'],
   palette: ['regular', 'palette'],
+  direction: ['regular', 'briefcase'],
+  securite: ['regular', 'shield-check'],
+  finances: ['regular', 'coins'],
+  personnel: ['regular', 'identification-badge'],
 };
 
 const lignes = [

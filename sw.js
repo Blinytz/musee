@@ -12,7 +12,7 @@
  */
 
 const PREFIXE = 'musee-';
-const CACHE = `${PREFIXE}v3-securite`;
+const CACHE = `${PREFIXE}v4-salon`;
 const CACHE_CATALOGUE = `${PREFIXE}catalogue`;
 
 const FICHIERS = [
@@ -22,10 +22,12 @@ const FICHIERS = [
   './css/app.css',
   './icons/icone.svg',
   './icons/icon-192.png',
-  './polices/inter-latin-400-normal.woff2',
-  './polices/inter-latin-600-normal.woff2',
-  './polices/cormorant-garamond-latin-600-normal.woff2',
-  './polices/cormorant-garamond-latin-500-italic.woff2',
+  './polices/dm-sans-latin-400-normal.woff2',
+  './polices/dm-sans-latin-500-normal.woff2',
+  './polices/dm-sans-latin-600-normal.woff2',
+  './polices/fraunces-latin-500-normal.woff2',
+  './polices/fraunces-latin-600-normal.woff2',
+  './polices/fraunces-latin-500-italic.woff2',
   './js/app.js',
   './js/config.js',
   './js/jeu.js',
@@ -53,9 +55,11 @@ const FICHIERS = [
   './js/ui/dom.js',
   './js/ui/icones.js',
   './js/ui/push.js',
+  './js/vendor/portraits.js',
   './js/ui/pages/arrivages.js',
   './js/ui/pages/atelier.js',
   './js/ui/pages/classement.js',
+  './js/ui/pages/direction.js',
   './js/ui/pages/expositions.js',
   './js/ui/pages/historique.js',
   './js/ui/pages/investir.js',
@@ -63,7 +67,6 @@ const FICHIERS = [
   './js/ui/pages/oeuvre.js',
   './js/ui/pages/personnel.js',
   './js/ui/pages/securite.js',
-  './js/ui/pages/plus.js',
   './js/ui/pages/rapport.js',
   './js/ui/pages/reglages.js',
   './js/ui/pages/reserve.js',

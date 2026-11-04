@@ -1,7 +1,7 @@
 // Atelier : emplacements de restauration, lancement des sessions, maîtrise.
 
 import { h, vider, icone, nombre, pourcent, duree, ajouter } from '../dom.js';
-import { feuille, peindre, puceNiveau, jauge, tenter, vignette, cartel } from '../composants.js';
+import { feuille, puceNiveau, jauge, tenter, vignette, cartel, cadreOeuvre, couleurMur } from '../composants.js';
 import { emplacementsAtelier } from '../../moteur/batiment.js';
 import {
   niveau, niveauMaitrise, progressionMaitrise, bonusMaitrise, effets, travailRequis,
@@ -35,8 +35,7 @@ export async function afficher(app, vue) {
 
 async function carteOeuvre(app, e, cfg, o) {
   const fiche = await app.fiche(o.id);
-  const toile = h('div.oeuvre-toile', { style: { minHeight: '180px' } });
-  peindre(app, toile, { fiche, oeuvre: o, progression: o.progression, id: o.id, support: o.support, cote: 700 });
+  const largeurMax = Math.min(680, window.innerWidth || 390) - 100;
   const et = etape(cfg.rendu, o.progression);
   const requise = niveau(cfg, o.niveau).maitrise;
   const actuelle = niveauMaitrise(cfg, e.maitrise[o.support] || 0);
@@ -44,14 +43,16 @@ async function carteOeuvre(app, e, cfg, o) {
   const fini = o.progression >= 1;
   const c = cartel(app, o, fiche);
 
-  return h('div.carte.pile',
-    h('button', { type: 'button', style: { all: 'unset', cursor: 'pointer' }, onclick: () => app.naviguer(`oeuvre/${o.id}`) }, toile),
+  return h('div.chevalet',
+    h('button.chevalet-toile', { type: 'button', style: { '--mur': couleurMur(null, 0) }, onclick: () => app.naviguer(`oeuvre/${o.id}`) },
+      cadreOeuvre(app, { id: o.id, fiche, oeuvre: o, progression: o.progression, hauteur: 220, largeurMax, cote: 700 }),
+      h('span.plaque', fini ? 'Restaurée' : et.nom, h('small', pourcent(o.progression)))),
+    h('div.chevalet-corps',
     h('div.ligne.espace',
       h('div', { style: { minWidth: 0 } },
         h('h3', c.titre),
         h('div.tres-discret', [c.artiste, c.connu ? c.support : null].filter(Boolean).join(' · '))),
       puceNiveau(cfg, o.niveau)),
-    h('div.ligne.espace', h('span', fini ? 'Restaurée' : et.nom), h('b.nombre', pourcent(o.progression))),
     jauge(o.progression),
     fini
       ? h('div.rangee-boutons', placerApresRestauration(app, o.id))
@@ -63,15 +64,12 @@ async function carteOeuvre(app, e, cfg, o) {
           h('button.bouton.primaire', {
             type: 'button', disabled: actuelle < requise || !!e.session,
             onclick: () => choisirDuree(app, o),
-          }, icone('lancer'), 'Session'))));
+          }, 'Restaurer')))));
 }
 
 function emplacementVide(app, e, cfg) {
-  return h('button.carte', {
-    type: 'button',
-    style: { minHeight: '120px', display: 'grid', placeItems: 'center', borderStyle: 'dashed', width: '100%' },
-    onclick: () => choisirOeuvre(app, e, cfg),
-  }, h('span.discret', icone('ajouter'), ' Placer une œuvre'));
+  return h('button.emplacement-vide', { type: 'button', onclick: () => choisirOeuvre(app, e, cfg) },
+    icone('ajouter'), 'Placer une œuvre');
 }
 
 async function choisirOeuvre(app, e, cfg) {
@@ -96,7 +94,7 @@ async function choisirOeuvre(app, e, cfg) {
 }
 
 /** Choix de la durée : de 10 min à 7 h, à la minute près. */
-function choisirDuree(app, o) {
+export function choisirDuree(app, o) {
   const { jeu } = app;
   const cfg = jeu.cfg;
   const e = jeu.etat;
@@ -136,7 +134,7 @@ function choisirDuree(app, o) {
     contenu: h('div.pile',
       valeur,
       h('div.ligne', pas(-10), pas(-1), curseur, pas(1), pas(10)),
-      h('div.rangee-boutons', raccourcis),
+      h('div.raccourcis', raccourcis),
       details),
     actions: h('button.bouton.primaire.plein', {
       type: 'button', style: { marginTop: '14px' },
@@ -148,7 +146,7 @@ function choisirDuree(app, o) {
           jeu.executer('reglages', { dureeSession: minutes }).catch(() => {});
         } else ev.currentTarget.disabled = false;
       },
-    }, icone('lancer'), 'Lancer'),
+    }, 'Lancer la session'),
   });
 }
 
@@ -156,13 +154,13 @@ function maitrises(e, cfg) {
   const eff = effets(cfg, e).efficacite;
   return h('div',
     h('div.section', h('h2', 'Maîtrise'), eff ? h('span.aside', `Équipement +${Math.round(eff * 100)} %`) : null),
-    h('div.pile', cfg.supports.map((s) => {
+    h('div.carte', { style: { padding: '2px 16px' } }, cfg.supports.map((s) => {
       const p = progressionMaitrise(cfg, e.maitrise[s.id] || 0);
-      return h('div.carte',
-        h('div.ligne.espace',
-          h('b', s.nom),
-          h('span.discret', `Niveau ${p.niveau} · +${Math.round(bonusMaitrise(cfg, e.maitrise[s.id] || 0) * 100)} %`)),
-        h('div', { style: { margin: '8px 0 4px' } }, jauge(p.part, 'or')),
-        h('div.tres-discret', p.prochain ? `${p.heures.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} h / ${p.prochain} h` : `${Math.round(p.heures)} h`));
+      return h('div.maitrise-ligne',
+        h('b', s.nom, h('span.tres-discret', { style: { fontWeight: 400 } }, ` · niveau ${p.niveau}`)),
+        h('span.tres-discret', p.prochain ? `${p.heures.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} / ${p.prochain} h` : `${Math.round(p.heures)} h`),
+        jauge(p.part, 'or'),
+        bonusMaitrise(cfg, e.maitrise[s.id] || 0) > 0.005
+          ? h('span.tres-discret', `+${Math.round(bonusMaitrise(cfg, e.maitrise[s.id] || 0) * 100)} % d'efficacité`) : null);
     })));
 }

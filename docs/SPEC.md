@@ -78,17 +78,22 @@ Prix d'arrivage = arrondi(50 × prestige^1,3).
 - Historique des sessions : date, durée, œuvre, travail, éclats.
 
 ## 5. Rendu de la restauration
-L'œuvre de départ est méconnaissable. Cinq couches de dégradation, rendues en
-canvas sur l'image réelle. Paramètres continus à l'intérieur de chaque étape.
+L'œuvre de départ est méconnaissable. Une toile qui a vécu, rendue en canvas
+sur l'image réelle : encrassement qui brouille la lecture, vernis oxydé,
+crasse et taches, craquelures fines, lacunes laissant voir l'enduit, grain de
+surface. Chaque étape efface sa couche ; paramètres continus dans l'étape
+(`rendu` dans `js/config.js`).
 
 | Progression | Étape | Évolution |
 |---|---|---|
-| 0 à 10 % | Consolidation | Craquelures de 100 % à 50 %. Mosaïque de 8 blocs de large, quasi monochrome, 60 % de lacunes. |
-| 10 à 30 % | Nettoyage | Crasse qui disparaît, mosaïque de 8 à 40 blocs de large. |
-| 30 à 55 % | Allègement du vernis | Voile jaune qui s'efface, saturation de 10 % à 80 %. |
-| 55 à 80 % | Comblement des lacunes | Lacunes de 60 % à 0 %, mosaïque de 40 à 150 blocs. |
-| 80 à 100 % | Retouche | Netteté finale, dernières craquelures, pleine définition. |
+| 0 à 10 % | Consolidation | Les écailles se refixent : le liseré sombre des lacunes s'efface, les craquelures reculent. |
+| 10 à 30 % | Nettoyage | La crasse et son voile brun disparaissent, l'image commence à se lire. |
+| 30 à 55 % | Dévernissage | Le vernis ambré s'allège : couleurs et netteté reviennent. |
+| 55 à 80 % | Réintégration | Les lacunes se comblent. |
+| 80 à 100 % | Vernis | Dernières craquelures, grain et flou résiduel : pleine définition. |
 
+- Pendant une session, une fenêtre de nettoyage part d'un point de la toile
+  et la gagne au fil du temps, en découvrant l'état qu'elle aura à la fin.
 - Motif des craquelures, crasse et ordre de comblement générés à partir d'une
   graine propre à chaque œuvre : rendu stable d'une ouverture à l'autre.
 - L'œuvre ne doit être reconnaissable qu'autour de 25 à 35 %.

@@ -1,7 +1,7 @@
 // Fiche d'œuvre : image, cartel, emplacement, image personnalisée, inspection.
 
 import { h, icone, nombre, pourcent, duree, siecleTexte, ajouter, majuscule } from '../dom.js';
-import { peindre, puceNiveau, jauge, tenter, sourceImage, confirmer, feuille, cartel } from '../composants.js';
+import { puceNiveau, jauge, tenter, sourceImage, confirmer, feuille, cartel, cadreOeuvre, couleurMur } from '../composants.js';
 import { urlSecours } from '../../rendu/images.js';
 import { prestige, nouveaute, siecle, niveau } from '../../moteur/regles.js';
 import { detailVisiteurs } from '../../moteur/visiteurs.js';
@@ -19,8 +19,15 @@ export async function afficher(app, vue, { params }) {
   if (!o && !fiche) { ajouter(vue, h('div.vide', 'Œuvre introuvable')); return; }
 
   const progression = o ? o.progression : 1;
-  const toile = h('div.oeuvre-toile', { style: { minHeight: '200px', cursor: progression >= 1 ? 'zoom-in' : 'default' } });
-  peindre(app, toile, { fiche, oeuvre: o, progression, id, support: o?.support || fiche?.support, cote: 1000 });
+  // Accrochée, l'œuvre se montre sur le mur de sa salle.
+  const espaces = espacesPublics(e);
+  const rang = o?.lieu === 'espace' ? espaces.findIndex((x) => x.id === o.espace) : -1;
+  const toile = h('div.oeuvre-toile', {
+    style: { minHeight: '200px', cursor: progression >= 1 ? 'zoom-in' : 'default', '--mur': couleurMur(rang >= 0 ? espaces[rang] : null, Math.max(0, rang)) },
+  }, cadreOeuvre(app, {
+    id, fiche, oeuvre: o, progression, support: o?.support || fiche?.support, cote: 1000,
+    hauteur: Math.round(Math.min(window.innerHeight * 0.48, 440)), largeurMax: Math.min(680, window.innerWidth || 390) - 90,
+  }));
   if (progression >= 1) toile.addEventListener('click', () => inspecter(app, fiche, o));
 
   const support = cfg.supports.find((s) => s.id === (o?.support || fiche?.support));

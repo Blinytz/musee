@@ -69,6 +69,9 @@ sécurité) ; ce qui suit en tranche les points d'application.
   démonstration locale (Éclats fictifs, horloge avançable dans Réglages).
 - `node outils/fonction.mjs` : réassemble l'Edge Function.
 - `node outils/icones.mjs <phosphor>/assets` : pictogrammes de l'interface.
+- Portraits du personnel : `js/vendor/portraits.js`, assemblé par esbuild
+  depuis `@dicebear/core` et `@dicebear/notionists` 9.4.2 (aucun dessin à la
+  main, aucune IA). Ne se charge qu'à la première fiche affichée.
 
 ## Publication
 
