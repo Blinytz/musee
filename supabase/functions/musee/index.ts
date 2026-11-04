@@ -1565,7 +1565,6 @@ async function envoyer(abonnement, charge, cles, { ttl = 86400, fetch: f = fetch
 var env = (k) => globalThis.Deno?.env.get(k) ?? globalThis.process?.env?.[k];
 var URL_SB = env("SUPABASE_URL");
 var CLE_SERVICE = env("SUPABASE_SERVICE_ROLE_KEY");
-var CLE_CRON = env("MUSEE_CLE_CRON") || env("CRON_SECRET");
 var URL_CATALOGUE = env("MUSEE_URL_CATALOGUE") || "https://blinytz.github.io/musee/catalogue/";
 var VAPID = {
   publique: env("MUSEE_VAPID_PUBLIQUE") || env("VAPID_PUBLIC"),
@@ -1586,6 +1585,11 @@ async function rest(chemin, { methode = "GET", corps, preferer } = {}) {
   const texte = await r.text();
   if (!r.ok) throw new Error(`${chemin} : ${r.status} ${texte.slice(0, 200)}`);
   return texte ? JSON.parse(texte) : null;
+}
+var cleCron = env("MUSEE_CLE_CRON") || null;
+async function cleAttendue() {
+  if (!cleCron) cleCron = await rest("rpc/musee_cle_cron", { methode: "POST", corps: {} }).catch(() => null);
+  return cleCron;
 }
 function tirer({ niveau: niveau2, support, graine, exclus }) {
   return rest("rpc/musee_tirer", {
@@ -1691,7 +1695,8 @@ async function sessions() {
   return dues.map((s) => s.id);
 }
 async function traiter(requete) {
-  if (!CLE_CRON || requete.headers.get("x-musee-cle") !== CLE_CRON) {
+  const cle = await cleAttendue();
+  if (!cle || requete.headers.get("x-musee-cle") !== cle) {
     return new Response("Refus\xE9", { status: 401 });
   }
   const { type } = await requete.json().catch(() => ({}));

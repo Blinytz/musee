@@ -16,6 +16,11 @@ on:
     # Le 2 du mois : le dump du mois précédent paraît le 1er vers 5 h UTC.
     - cron: '17 6 2 * *'
   workflow_dispatch:
+    inputs:
+      synchro_seule:
+        description: Pousser dans Supabase le catalogue déjà publié, sans le reconstruire
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -27,6 +32,7 @@ concurrency:
 
 jobs:
   wikidata:
+    if: ${{ !inputs.synchro_seule }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     outputs:
@@ -132,7 +138,7 @@ jobs:
           fi
       - name: Synchronisation Supabase
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: https://psutbulpezfdftmaqkoo.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] && [ -n "$SUPABASE_URL" ]; then
@@ -140,3 +146,26 @@ jobs:
           else
             echo "Secrets Supabase absents : synchronisation sautée."
           fi
+
+  # Lancement à la main, case « synchro_seule » cochée : remplit
+  # musee_catalogue depuis catalogue/ tel qu'il est publié (première mise en
+  # service, ou table à resynchroniser).
+  synchro:
+    if: ${{ inputs.synchro_seule }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Synchronisation Supabase
+        env:
+          SUPABASE_URL: https://psutbulpezfdftmaqkoo.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Secret SUPABASE_SERVICE_ROLE_KEY absent du dépôt."
+            exit 1
+          fi
+          node outils/catalogue/supabase-sync.mjs

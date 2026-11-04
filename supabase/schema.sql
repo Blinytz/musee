@@ -223,7 +223,7 @@ create policy musee_images_suppression on storage.objects for delete to authenti
 /* ------------------------------------------------------------------ */
 
 -- L'adresse de la fonction et sa clé d'appel vivent dans le coffre (Vault),
--- jamais dans le code. Voir docs/INSTALLATION.md, étape 3.
+-- jamais dans le code. Elles y sont posées plus bas (docs/INSTALLATION.md).
 create or replace function public.musee_appeler(p_type text)
 returns void
 language plpgsql security definer set search_path = public as $$
@@ -265,6 +265,34 @@ language sql security definer set search_path = public as $$
      and jobid in (select jobid from cron.job where jobname like 'musee-%');
 $$;
 revoke all on function public.musee_purger() from public, anon, authenticated;
+
+-- Droits : ce projet n'accorde rien d'office aux tables neuves. L'appli lit
+-- directement son état, ses sessions et le catalogue (elle n'écrit que par
+-- les fonctions ci-dessus) ; l'Edge Function et la synchro du catalogue
+-- passent par la clé de service.
+grant select on public.musee_etats, public.musee_sessions, public.musee_catalogue to authenticated;
+grant all on public.musee_etats, public.musee_sessions, public.musee_catalogue, public.musee_abonnements to service_role;
+
+-- Coffre : l'adresse de la fonction et sa clé d'appel. La clé est tirée au
+-- hasard ici, une fois pour toutes ; pg_cron l'envoie, l'Edge Function la
+-- relit par musee_cle_cron(). Personne ne la recopie.
+do $$
+begin
+  if not exists (select 1 from vault.secrets where name = 'musee_url_fonction') then
+    perform vault.create_secret('https://psutbulpezfdftmaqkoo.supabase.co/functions/v1/musee', 'musee_url_fonction');
+  end if;
+  if not exists (select 1 from vault.secrets where name = 'musee_cle_cron') then
+    perform vault.create_secret(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 'musee_cle_cron');
+  end if;
+end $$;
+
+create or replace function public.musee_cle_cron()
+returns text
+language sql stable security definer set search_path = public as $$
+  select decrypted_secret from vault.decrypted_secrets where name = 'musee_cle_cron'
+$$;
+revoke all on function public.musee_cle_cron() from public, anon, authenticated;
+grant execute on function public.musee_cle_cron() to service_role;
 
 select cron.unschedule(jobid) from cron.job where jobname in ('musee-sessions', 'musee-quotidien', 'musee-purge');
 -- Chaque heure à 5 : la fonction ne ferme une journée qu'après 4 h, heure de

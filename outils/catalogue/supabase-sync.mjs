@@ -36,6 +36,10 @@ export function lignesCatalogue() {
   return lignes;
 }
 
+// Les clés secrètes récentes (sb_secret_…) ne passent que dans `apikey` ;
+// une ancienne clé service_role (un JWT) va aussi dans Authorization.
+const entetes = (cle) => ({ apikey: cle, ...(cle.startsWith('sb_') ? {} : { Authorization: `Bearer ${cle}` }) });
+
 const egales = (a, b) => a.niveau === b.niveau && a.prestige === b.prestige && a.support === b.support && (a.musee ?? null) === (b.musee ?? null);
 
 async function lignesDistantes(url, cle) {
@@ -45,7 +49,7 @@ async function lignesDistantes(url, cle) {
     // Pagination par clé (id > dernier vu) : un décalage OFFSET ralentirait
     // chaque page et finit par expirer sur l'offre gratuite.
     const r = await chercher(`${url}/rest/v1/musee_catalogue?select=id,niveau,prestige,support,musee&id=gt.${apres}&order=id.asc&limit=1000`, {
-      headers: { apikey: cle, Authorization: `Bearer ${cle}` },
+      headers: entetes(cle),
     });
     if (!r.ok) throw new Error(`lecture HTTP ${r.status} ${await r.text()}`);
     const page = await r.json();
@@ -71,8 +75,7 @@ export async function synchroniser({ aSec = false } = {}) {
     const r = await chercher(`${url}/rest/v1/musee_catalogue?on_conflict=id`, {
       method: 'POST',
       headers: {
-        apikey: cle,
-        Authorization: `Bearer ${cle}`,
+        ...entetes(cle),
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates,return=minimal',
       },

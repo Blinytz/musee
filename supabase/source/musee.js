@@ -18,10 +18,9 @@ const env = (k) => globalThis.Deno?.env.get(k) ?? globalThis.process?.env?.[k];
 
 const URL_SB = env('SUPABASE_URL');
 const CLE_SERVICE = env('SUPABASE_SERVICE_ROLE_KEY');
-// Les secrets d'Edge Function sont communs au projet : Musée reprend ceux que
-// WikiDeck a posés (CRON_SECRET, VAPID_*). Un secret MUSEE_* les remplace si
-// les deux applications doivent un jour se séparer.
-const CLE_CRON = env('MUSEE_CLE_CRON') || env('CRON_SECRET');
+// Les secrets d'Edge Function sont communs au projet : Musée reprend les clés
+// VAPID que WikiDeck a posées. Un secret MUSEE_* les remplace si les deux
+// applications doivent un jour se séparer.
 const URL_CATALOGUE = env('MUSEE_URL_CATALOGUE') || 'https://blinytz.github.io/musee/catalogue/';
 const VAPID = {
   publique: env('MUSEE_VAPID_PUBLIQUE') || env('VAPID_PUBLIC'),
@@ -43,6 +42,14 @@ async function rest(chemin, { methode = 'GET', corps, preferer } = {}) {
   const texte = await r.text();
   if (!r.ok) throw new Error(`${chemin} : ${r.status} ${texte.slice(0, 200)}`);
   return texte ? JSON.parse(texte) : null;
+}
+
+// La clé d'appel vit dans le coffre de la base (schema.sql), qui l'envoie
+// avec chaque appel de pg_cron. MUSEE_CLE_CRON la remplace pour les essais.
+let cleCron = env('MUSEE_CLE_CRON') || null;
+async function cleAttendue() {
+  if (!cleCron) cleCron = await rest('rpc/musee_cle_cron', { methode: 'POST', corps: {} }).catch(() => null);
+  return cleCron;
 }
 
 /** Tirage d'arrivage : même règle que l'application (fonction SQL musee_tirer). */
@@ -165,7 +172,8 @@ async function sessions() {
 }
 
 export async function traiter(requete) {
-  if (!CLE_CRON || requete.headers.get('x-musee-cle') !== CLE_CRON) {
+  const cle = await cleAttendue();
+  if (!cle || requete.headers.get('x-musee-cle') !== cle) {
     return new Response('Refusé', { status: 401 });
   }
   const { type } = await requete.json().catch(() => ({}));
