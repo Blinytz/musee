@@ -29,8 +29,13 @@ ci-dessous vivent dans `js/config.js` et se règlent dans Réglages.
 
    Les salaires sont déductibles : plus on gagne, moins un employé coûte
    réellement. Le comptable réduit l'impôt.
-5. **Net** crédité sur la Centrale, arrondi à l'entier inférieur. La
-   rémunération d'un prêt n'est pas imposée.
+5. **Net** crédité sur la Centrale. La rémunération d'un prêt n'est pas
+   imposée.
+
+Il n'existe pas de fraction d'Éclat. Un taux peut en avoir (un salaire de
+0,5 ✦ par heure), mais chaque montant dû ou versé est arrondi à l'Éclat le
+plus proche : recettes, salaires, arriérés, impôt. Le net est leur
+différence exacte.
 
 ## 2. Personnel
 

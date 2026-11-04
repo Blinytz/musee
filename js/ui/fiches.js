@@ -259,7 +259,7 @@ export function fichePersonne(app, p, { candidat = false } = {}) {
         !apport.length && !effetsPropres(cfg, p.role, niveau).length && !doublon ? ligne('Aucun effet mesurable aujourd\'hui') : null),
       bloc('Coût',
         candidat ? ligne(`Embauche : ${nombre(fraisRecrutement(cfg, e, p))} ✦, une fois`) : null,
-        ligne(`Salaire : ${decimale(salaire)} ✦ par heure de session, prélevé à la fin de chaque session`)),
+        ligne(`Salaire : ${decimale(salaire)} ✦ par heure de session, prélevé à la fin de chaque session, arrondi à l'Éclat près`)),
       !candidat && suivant ? bloc(`Niveau ${suivant} dans ${resteH} h de sessions`,
         lignesEcarts(auSuivant),
         ligne(`Salaire : ${decimale(salaireHoraire(cfg, e, { role: p.role, niveau: suivant }))} ✦ par heure`)) : null,

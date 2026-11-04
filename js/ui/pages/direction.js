@@ -66,7 +66,7 @@ function chiffres(app, e, cfg, jour) {
         h('button.bouton.petit.icone-seule', { type: 'button', 'aria-label': 'Baisser le prix', disabled: e.prixBillet <= 0, onclick: () => app.agir('fixerPrix', e.prixBillet - 1) }, icone('retirer')),
         h('b', e.prixBillet === 0 ? 'Gratuit' : `${e.prixBillet} ✦`),
         h('button.bouton.petit.icone-seule', { type: 'button', 'aria-label': 'Augmenter le prix', disabled: e.prixBillet >= cfg.visiteurs.prix.max, onclick: () => app.agir('fixerPrix', e.prixBillet + 1) }, icone('ajouter'))),
-      h('small', `Optimal ${decimale(prixOptimal(cfg, e.reputation))} ✦`)),
+      h('small', `Optimal ${Math.round(prixOptimal(cfg, e.reputation))} ✦`)),
     h('div.chiffre', h('span', icone('musee'), 'Places'), h('b', nombre(places)),
       h('small', `Densité ${places ? Math.round(v / places) : 0}`)));
 }

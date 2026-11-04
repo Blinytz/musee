@@ -56,6 +56,18 @@ test('fin de session : recettes, salaires, impôt, net arrondi en dessous', () =
   assert.ok(Math.abs(comptable.impot - b.impot * 0.75) < 1e-9);
 });
 
+test('fin de session : des Éclats entiers, et un net qui tombe juste', () => {
+  // Taux fractionnaires (0,5 ✦/h, 7,3 ✦/h de recettes) : aucun montant ne l'est.
+  for (const [taux, salaire, minutes, arrieres] of [[7.3, 0.5, 50, 0], [0.6, 0.5, 60, 0.4], [1234.5, 17.3, 95, 3], [3, 2.6, 37, 1.5]]) {
+    const b = bilanFinancier(cfg, { tauxHoraire: taux, salaireHoraire: salaire, minutes, arrieres });
+    for (const k of ['recettes', 'salaires', 'arrieresPayes', 'arrieresRestants', 'impot', 'net']) {
+      assert.ok(Number.isInteger(b[k]), `${k} = ${b[k]}`);
+    }
+    if (b.arrieresRestants) assert.equal(b.arrieresRestants, b.salaires + Math.round(arrieres) - b.recettes);
+    else assert.equal(b.net, b.recettes - b.salaires - b.arrieresPayes - b.impot);
+  }
+});
+
 test('salaires non couverts : rien n\'est versé, le reste passe en arriérés', () => {
   const b = bilanFinancier(cfg, { tauxHoraire: 5, salaireHoraire: 8, minutes: 60, arrieres: 2 });
   assert.equal(b.net, 0);
