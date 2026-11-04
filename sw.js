@@ -12,7 +12,7 @@
  */
 
 const PREFIXE = 'musee-';
-const CACHE = `${PREFIXE}v5-fiches`;
+const CACHE = `${PREFIXE}v6-portraits`;
 const CACHE_CATALOGUE = `${PREFIXE}catalogue`;
 
 const FICHIERS = [
@@ -54,6 +54,7 @@ const FICHIERS = [
   './js/ui/composants.js',
   './js/ui/dom.js',
   './js/ui/fiches.js',
+  './js/ui/genres.js',
   './js/ui/icones.js',
   './js/ui/push.js',
   './js/vendor/portraits.js',

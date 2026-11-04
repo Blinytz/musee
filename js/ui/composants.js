@@ -5,6 +5,7 @@ import { effets, siecle } from '../moteur/regles.js';
 import { dessiner, chargerImage } from '../rendu/restauration.js';
 import { urlImage, urlSecours, ratio } from '../rendu/images.js';
 import { empreinte } from '../moteur/alea.js';
+import { genre, APPARENCES } from './genres.js';
 
 /* ---------- Annonces ---------- */
 
@@ -269,12 +270,18 @@ export function couleurMur(espace, rang = 0) {
 // La bibliothèque pèse ~370 Ko : elle ne se charge qu'à la première fiche.
 let portraits = null;
 
-/** Portrait dessiné d'un membre du personnel, toujours le même pour une graine. */
-export function portrait(graine, classe = '') {
+/**
+ * Portrait dessiné d'un membre du personnel, toujours le même pour un nom :
+ * une Juliette a des traits de femme, un Karim des traits d'homme.
+ */
+export function portrait(nom, classe = '') {
   const el = h('span.portrait', { classe, 'aria-hidden': 'true' });
   portraits ??= import('../vendor/portraits.js');
   portraits.then((m) => {
-    el.innerHTML = m.portrait(String(graine), { backgroundColor: ['ead9bd', 'e3cfae', 'efe0c4', 'dcc9a8', 'e8d3c4'] });
+    el.innerHTML = m.portrait(String(nom), {
+      backgroundColor: ['ead9bd', 'e3cfae', 'efe0c4', 'dcc9a8', 'e8d3c4'],
+      ...APPARENCES[genre(nom)],
+    });
   }).catch(() => {});
   return el;
 }

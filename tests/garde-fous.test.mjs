@@ -5,6 +5,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { configEffective } from '../js/config.js';
 import { simuler } from '../outils/simulation.mjs';
+import { PRENOMS } from '../js/moteur/noms.js';
+import { FEMININS, MASCULINS, EPICENES } from '../js/ui/genres.js';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -59,5 +61,12 @@ test('équilibrage : à partir du statut national, à moins de 10 % des repères
       const ecart = r.atteints[s].jours / reperes[s][k] - 1;
       assert.ok(Math.abs(ecart) <= 0.10, `${h} h/jour, statut ${s} : ${Math.round(ecart * 100)} %`);
     }
+  }
+});
+
+test('chaque prénom du moteur a un genre, pour que son portrait lui ressemble', () => {
+  for (const p of PRENOMS) {
+    const n = [FEMININS, MASCULINS, EPICENES].filter((x) => x.has(p)).length;
+    assert.equal(n, 1, `${p} : ${n ? 'classé deux fois' : 'sans genre'}`);
   }
 });
