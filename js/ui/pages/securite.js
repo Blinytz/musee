@@ -1,10 +1,9 @@
-// Sécurité : trois menaces, le matériel, l'équipe, les prêteurs, les œuvres volées.
+// Sécurité : trois menaces, le matériel, l'équipe, les prêteurs, les œuvres
+// volées. Chaque menace et chaque matériel ouvre sa fiche détaillée.
 
 import { h, icone, nombre, dateJour, ajouter, pourcent } from '../dom.js';
-import { confirmer, jauge } from '../composants.js';
-import {
-  MENACES, risques, protections, probabilites, risqueMaximal, chanceEnquete, seuilEmprunt,
-} from '../../moteur/securite.js';
+import { MENACES, probabilites, risqueMaximal, chanceEnquete, seuilEmprunt } from '../../moteur/securite.js';
+import { ficheMenace, ficheMateriel, niveauRisque, resumeMateriel } from '../fiches.js';
 import { catalogueInvestissements } from '../../moteur/actions.js';
 import { employes, role } from '../../moteur/personnel.js';
 import { prochainJourSemaine } from '../../moteur/temps.js';
@@ -16,26 +15,28 @@ export async function afficher(app, vue) {
   const e = jeu.etat;
   const cfg = jeu.cfg;
   const jour = jeu.jour();
-  const r = risques(cfg, e, jour);
-  const s = protections(cfg, e);
   const p = probabilites(cfg, e, jour);
   const tirage = prochainJourSemaine(jour, cfg.securite.jourSemaine);
+  // La jauge se remplit avec le risque : pleine à 10 % par semaine.
+  const plein = 0.10;
 
   ajouter(vue,
     h('div.section', h('h2', 'Sécurité'), h('span.aside', `Tirage le ${dateJour(tirage, { weekday: 'long' })}`)),
-    h('div.pile', MENACES.map((m) => h('div.carte.pile', { style: { gap: '6px' } },
-      h('div.ligne.espace',
+    h('div.menaces', MENACES.map((m) => {
+      const n = niveauRisque(p[m]);
+      return h('button.menace', { type: 'button', onclick: () => ficheMenace(app, m) },
         h('b', cfg.securite.menaces[m].nom),
-        h('b.nombre', { style: { color: p[m] > 0.05 ? 'var(--rouge)' : p[m] < 0.015 ? 'var(--vert)' : null } }, `${pct(p[m])} / sem.`)),
-      jauge(r[m] ? Math.min(1, s[m] / r[m]) : 1),
-      h('div.ligne.espace.tres-discret', h('span', `Protection ${nombre(s[m])}`), h('span', `Risque ${nombre(r[m])}`))))),
+        h('span.menace-valeur', { style: { color: n.couleur } }, pct(p[m])),
+        h('div.jauge', h('i', { style: { width: `${Math.min(1, p[m] / plein) * 100}%`, background: n.couleur } })),
+        h('small', n.mot));
+    })),
   );
 
   // Ce que les prêteurs exigent avant de confier une œuvre.
   const pire = risqueMaximal(cfg, e, jour);
   const seuils = Object.keys(cfg.securite.seuilsEmprunt || {}).map(Number).sort();
   if (seuils.length) {
-    ajouter(vue, h('h3', { style: { margin: '18px 2px 8px' } }, 'Prêteurs'),
+    ajouter(vue, h('div.section', h('h2', 'Prêteurs')),
       h('div.carte.pile', { style: { gap: '6px' } }, seuils.map((n) => {
         const ok = pire <= seuilEmprunt(cfg, n);
         return h('div.ligne.espace',
@@ -45,33 +46,22 @@ export async function afficher(app, vue) {
   }
 
   // Matériel, avec ce qu'il couvre et le métier qu'il ouvre.
-  const solde = app.solde;
   const ouvre = (id) => cfg.personnel.roles.find((x) => x.equipement === id);
   const materiel = catalogueInvestissements(cfg, e).filter((x) => x.categorie === 'securite');
-  ajouter(vue, h('h3', { style: { margin: '18px 2px 8px' } }, 'Matériel'),
-    h('div.pile', materiel.map((x) => {
+  ajouter(vue, h('div.section', h('h2', 'Matériel')),
+    h('div.entrees', materiel.map((x) => {
       const f = x.effets || {};
-      const couvre = MENACES.filter((m) => f[m]).map((m) => `${cfg.securite.menaces[m].nom.toLowerCase()} +${nombre(f[m])}`);
       const metier = ouvre(x.id.replace(/^inv:/, ''));
       const sansServant = f.requiert && !employes(e, f.requiert).length && x.acquis;
-      return h('div.carte.ligne.espace',
-        h('div', { style: { minWidth: 0 } },
-          h('b', x.nom),
-          h('div.tres-discret', [
-            couvre.join(' · '),
-            f.salleForte ? 'réserve protégée' : null,
-            f.securite === 1 ? 'Chefs-d\'œuvre exposables' : null,
-            f.securite === 2 ? 'Trésors exposables' : null,
-          ].filter(Boolean).join(' · ') || null),
-          metier ? h('div.tres-discret', { style: { color: 'var(--accent)' } }, metier.nom) : null,
-          sansServant ? h('div.tres-discret', { style: { color: 'var(--rouge)' } }, `Sans ${role(cfg, f.requiert)?.nom.toLowerCase()}`) : null),
-        x.acquis ? h('span.puce', 'Acquis') : h('button.bouton.petit.or', {
-          type: 'button', disabled: !!x.refus || (solde !== null && solde < x.prix),
-          onclick: async () => {
-            if (!(await confirmer(x.nom, { texte: `${nombre(x.prix)} ✦`, oui: 'Acheter' }))) return;
-            await app.agir('investir', { quoi: x.id }, { succes: x.nom });
-          },
-        }, x.refus || `${nombre(x.prix)} ✦`));
+      const effet = x.refus && !x.acquis ? null : resumeMateriel(app, x);
+      const norme = f.securite ? `${f.securite === 1 ? 'Chefs-d\'œuvre' : 'Trésors'} exposables` : null;
+      const sous = sansServant ? `Sans ${role(cfg, f.requiert)?.nom.toLowerCase()}`
+        : (effet || (metier ? `Ouvre : ${metier.nom.toLowerCase()}` : norme));
+      return h('button.entree', { type: 'button', onclick: () => ficheMateriel(app, x) },
+        h('span', h('b', x.nom), sous ? h('small', { classe: sansServant ? 'alerte' : (effet && !x.acquis ? 'effet' : '') }, sous) : null),
+        x.acquis ? h('span.puce', 'Acquis')
+          : h('span.puce', { style: x.refus ? null : { background: 'var(--laiton)', color: 'var(--laiton-texte)' } }, x.refus || `${nombre(x.prix)} ✦`),
+        icone('droite'));
     })));
 
   // L'équipe de sécurité, métier par métier.

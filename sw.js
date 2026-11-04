@@ -12,7 +12,7 @@
  */
 
 const PREFIXE = 'musee-';
-const CACHE = `${PREFIXE}v4-salon`;
+const CACHE = `${PREFIXE}v5-fiches`;
 const CACHE_CATALOGUE = `${PREFIXE}catalogue`;
 
 const FICHIERS = [
@@ -53,6 +53,7 @@ const FICHIERS = [
   './js/rendu/restauration.js',
   './js/ui/composants.js',
   './js/ui/dom.js',
+  './js/ui/fiches.js',
   './js/ui/icones.js',
   './js/ui/push.js',
   './js/vendor/portraits.js',

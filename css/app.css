@@ -388,6 +388,54 @@ input[type=range] { accent-color: var(--accent); }
 .entree > span:not(.puce) { flex: 1; font-weight: 500; }
 .entree > .icone:last-child { color: var(--texte-3); width: 16px; height: 16px; }
 
+.entree { width: 100%; background: none; border: 0; border-top: 1px solid var(--trait); text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.entree small { display: block; color: var(--texte-2); font-size: 12px; font-weight: 400; margin-top: 2px; }
+.entree small.effet, .personne-texte .effet { color: var(--vert); font-weight: 600; }
+.entree small.alerte { color: var(--rouge); font-weight: 600; }
+
+.personnes { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; }
+.personne { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--trait); cursor: pointer; }
+.personne:first-child { border-top: 0; }
+.personne .portrait { width: 44px; height: 44px; }
+.personne-texte { flex: 1; min-width: 0; }
+.personne-texte b { display: block; }
+.personne-texte small { display: block; color: var(--texte-2); font-size: 12px; }
+
+.menaces { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.menace {
+  display: grid; gap: 6px; align-content: start; text-align: left; padding: 12px; color: inherit;
+  background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); font: inherit; cursor: pointer;
+}
+.menace b { font-size: 13px; line-height: 1.2; min-height: 2.4em; }
+.menace-valeur { font-family: var(--titre); font-size: 24px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }
+.menace small { font-size: 11px; color: var(--texte-2); }
+
+.fiche { display: grid; gap: 16px; }
+.fiche-tete { display: flex; align-items: center; gap: 14px; }
+.fiche-tete b { font-size: 16px; }
+.portrait.grand { width: 64px; height: 64px; }
+.fiche-texte { margin: 0; color: var(--texte); line-height: 1.5; }
+.fiche-bloc { display: grid; gap: 6px; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px 14px; }
+.fiche-legende { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-3); font-weight: 600; }
+.fiche-ligne { font-size: 14px; }
+.fiche-ecart { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.fiche-ecart > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fiche-ecart > span:last-child { white-space: nowrap; color: var(--texte-2); }
+.fiche-ecart.mieux b { color: var(--vert); }
+.fiche-ecart.pire b { color: var(--rouge); }
+.fiche-risque { display: flex; align-items: baseline; gap: 10px; }
+.fiche-risque b { font-family: var(--titre); font-size: 34px; font-weight: 600; line-height: 1; }
+.fiche-risque span { color: var(--texte-2); }
+.fiche-lien {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 0; border: 0; border-top: 1px solid var(--trait);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.fiche-lien > span:first-child { flex: 1; min-width: 0; }
+.fiche-lien small { display: block; color: var(--texte-2); font-size: 12px; }
+.fiche-lien .nombre { color: var(--vert); font-weight: 600; white-space: nowrap; }
+.fiche-lien .icone { color: var(--texte-3); width: 16px; height: 16px; }
+.fiche-legende + .fiche-lien { border-top: 0; }
+
 .equipe { display: flex; align-items: center; gap: 12px; }
 .equipe > .icone:last-child { color: var(--texte-3); width: 16px; height: 16px; }
 .portrait .icone { width: 24px; height: 24px; }
