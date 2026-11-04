@@ -84,8 +84,30 @@ const app = {
     installation.prompt();
     await installation.userChoice.catch(() => null);
     installation = null;
+    majInstallation();
   },
 };
+
+/* ---------- Installation ---------- */
+
+// Boutons « Installer » des écrans sans en-tête (connexion, création) : ils
+// apparaissent dès que Chrome propose l'installation.
+const boutonsInstaller = new Set();
+function boutonInstaller() {
+  const b = h('button.bouton.plein', { type: 'button', hidden: !installation, onclick: () => app.installer() },
+    icone('installer'), 'Installer l\'application');
+  boutonsInstaller.add(b);
+  return b;
+}
+
+function majInstallation() {
+  for (const b of boutonsInstaller) {
+    if (!b.isConnected) boutonsInstaller.delete(b);
+    else b.hidden = !installation;
+  }
+  majEntete();
+  if (['direction', 'plus', 'reglages'].includes(routeCourante().nom)) afficherRoute({ garderDefilement: true });
+}
 
 async function rafraichirSolde() {
   try {
@@ -109,6 +131,7 @@ function majEntete() {
     h('a.entete-nom', { href: '#/classement' },
       h('h1', e.nom),
       h('div.entete-statut', [`${nombre(visiteurs)} visiteurs/j`, `réputation ${Math.round(e.reputation)}`, rang ? `${nombre(rang)}e` : null].filter(Boolean).join(' · '))),
+    installation ? h('button.installer-entete', { type: 'button', onclick: () => app.installer() }, icone('installer'), 'Installer') : null,
     h('button.solde', { type: 'button', onclick: () => app.naviguer('historique'), 'aria-label': 'Solde d\'Éclats' },
       solde === null ? '?' : nombre(solde)));
   majNavigation();
@@ -203,7 +226,8 @@ function ecranConnexion(erreur) {
     h('div.plaque', 'Musée'),
     erreur ? h('p.discret', { style: { textAlign: 'center' } }, erreur) : null,
     formulaire,
-    h('a.tres-discret', { href: '?demo', style: { textAlign: 'center' } }, 'Démonstration'))));
+    h('a.tres-discret', { href: '?demo', style: { textAlign: 'center' } }, 'Démonstration'),
+    boutonInstaller())));
 }
 
 function ecranCreation() {
@@ -226,7 +250,7 @@ function ecranCreation() {
     },
   },
   h('div.plaque', 'Votre musée'),
-  nom, bouton)));
+  nom, bouton, boutonInstaller())));
   nom.focus();
 }
 
@@ -371,7 +395,11 @@ verifierVersion();
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   installation = e;
-  if (['direction', 'plus', 'reglages'].includes(routeCourante().nom)) afficherRoute();
+  majInstallation();
+});
+window.addEventListener('appinstalled', () => {
+  installation = null;
+  majInstallation();
 });
 
 if ('serviceWorker' in navigator && !demo && location.protocol === 'https:') {

@@ -58,6 +58,7 @@ const ICONES = {
   boutique: ['regular', 'storefront'],
   deconnexion: ['regular', 'sign-out'],
   telecharger: ['regular', 'upload-simple'],
+  installer: ['regular', 'download-simple'],
   retour: ['regular', 'arrow-counter-clockwise'],
   palette: ['regular', 'palette'],
   direction: ['regular', 'briefcase'],

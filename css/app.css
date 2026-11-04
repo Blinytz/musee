@@ -92,6 +92,12 @@ body[data-route="musee"] .entete-statut { color: var(--creme-2); }
   font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .solde::before { content: '✦'; }
+.installer-entete {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 7px 12px; border-radius: 999px; border: 1.5px solid currentColor;
+  background: transparent; color: inherit; font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.installer-entete .icone { width: 16px; height: 16px; }
 body[data-route="musee"] .solde { background: var(--creme); color: var(--mur-entete, var(--mur)); }
 
 main { max-width: 680px; margin: 0 auto; padding: 4px 16px calc(var(--bas) + 100px); }
