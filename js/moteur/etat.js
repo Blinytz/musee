@@ -141,6 +141,13 @@ export function migrer(etat, cfg = null) {
       e.securite.salles[lieu] = [...new Set([...(e.securite.salles[lieu] || []), cible[0]])];
     }
     e.investissements = garde;
+    // L'enquêteur salarié devient un détective, engagé par mission.
+    const enqueteurs = (e.personnel?.employes || []).filter((x) => x.role === 'enqueteur');
+    if (enqueteurs.length) {
+      e.detectives = e.detectives || { carnet: [], candidats: [] };
+      for (const x of enqueteurs) e.detectives.carnet.push({ id: `d-${x.id}`, nom: x.nom, xp: 0, efficacite: x.efficacite ?? 1, salaire: x.salaire ?? 1 });
+      e.personnel.employes = e.personnel.employes.filter((x) => x.role !== 'enqueteur');
+    }
     let rang = 0;
     for (const x of e.personnel?.employes || []) {
       if (x.affectation) continue;

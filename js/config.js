@@ -293,7 +293,6 @@ export const CONFIG = {
       { id: 'maitreChien', nom: 'Maître-chien', pluriel: 'Maîtres-chiens', famille: 'securite', statutMin: 3, equipement: 'chenil', base: 0.7, poids: 1, menaces: { vol: 12 } },
       { id: 'technicien', nom: 'Technicien de sécurité', pluriel: 'Techniciens de sécurité', famille: 'securite', statutMin: 1, equipement: 'alarme', base: 0.8, poids: 1, unique: true, materielBase: 0.10, materielNiveau: 0.03 },
       { id: 'chefSecurite', nom: 'Chef de la sécurité', pluriel: 'Chefs de la sécurité', famille: 'securite', statutMin: 3, equipement: 'pcSecurite', base: 1.2, poids: 1, unique: true, humainBase: 0.10, humainNiveau: 0.03 },
-      { id: 'enqueteur', nom: 'Enquêteur', pluriel: 'Enquêteurs', famille: 'securite', statutMin: 3, base: 1, poids: 1, unique: true, enqueteBase: 0.03, enqueteNiveau: 0.015 },
       { id: 'pilote', nom: 'Pilote de drone', pluriel: 'Pilotes de drone', famille: 'securite', statutMin: 4, equipement: 'drones', base: 1, poids: 1, menaces: { vol: 25 } },
       { id: 'assistant', nom: 'Assistant restaurateur', pluriel: 'Assistants restaurateurs', statutMin: 1, base: 1, poids: 2, partBase: 0.12, partNiveau: 0.03, plafond: 0.30 },
       { id: 'mediateur', nom: 'Médiateur', pluriel: 'Médiateurs', statutMin: 0, base: 0.6, poids: 2, satisfactionBase: 1.5, satisfactionNiveau: 0.5, plafondTotal: 15 },
@@ -332,6 +331,20 @@ export const CONFIG = {
     // Risque maximal (par semaine, vol et vandalisme de la salle la plus
     // exposée) qu'un prêteur accepte selon le niveau de l'œuvre empruntée.
     seuilsEmprunt: { 3: 0.05, 4: 0.03, 5: 0.015 },
+  },
+
+  // Détectives (docs/ECONOMIE.md, section 3) : engagés par mission, payés
+  // d'avance à la semaine, `prime` du prix de l'œuvre à celui qui la ramène.
+  // Chance par semaine = (base + niveau × pas) × efficacité. Tarif par
+  // semaine = base × facteur^(niveau - 1) × grille du statut × prétention.
+  // Niveau : œuvres retrouvées (seuils `xp`).
+  detectives: {
+    candidatsParSemaine: 3, tarifBase: 15, tarifNiveau: 1.25, chanceBase: 0.05, chanceNiveau: 0.015,
+    xp: [1, 3, 6, 10, 15, 21, 28, 36, 45], durees: [2, 4, 8], prime: 0.05,
+    piste: {
+      probabilite: 0.15, prixPart: 0.6, joursReponse: 3, bonusPolice: 0.15,
+      villes: ['Genève', 'Anvers', 'Londres', 'Bruxelles', 'Marseille', 'Amsterdam', 'Milan', 'New York', 'Hong Kong', 'Vienne'],
+    },
   },
 
   // Matériel installé dans un espace précis. Son prix suit la taille de la

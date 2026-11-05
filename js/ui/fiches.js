@@ -3,12 +3,15 @@
 // que ça change ici (calculé sur une copie de l'état avec les vrais
 // moteurs, avant → après), ce que ça coûte, ce qu'il faut pour l'avoir.
 
-import { h, icone, nombre } from './dom.js';
+import { h, icone, nombre, dateJour } from './dom.js';
 import { feuille, portrait, confirmer, cartel } from './composants.js';
 import {
   MENACES, risques, probabilites, chanceEnquete, risqueMusee, semaine, lieuxSecurises, materielDe,
   materielPossible, prixMateriel, affectation, affectationParDefaut,
 } from '../moteur/securite.js';
+import {
+  detectivesLibres, chanceDetective, tarifDetective, forfait, niveauDetective, chancePolice, prime,
+} from '../moteur/detectives.js';
 import {
   role, refusRole, minutesPourNiveau, niveauEmploye, salaireHoraire, fraisRecrutement, efficacite,
   avecNiveaux, partAssistant, arrieresBloquants,
@@ -27,7 +30,6 @@ const ROLES = {
   maitreChien: 'Patrouille la nuit avec son chien. Très dissuasif pour les cambrioleurs.',
   technicien: 'Règle et entretient le matériel électronique : alarme, caméras, portiques, drones. Tout ce matériel protège mieux.',
   chefSecurite: 'Dirige l\'équipe de sécurité : chaque gardien, veilleur ou agent protège davantage.',
-  enqueteur: 'Travaille avec la police pour retrouver les œuvres volées.',
   pilote: 'Fait voler les drones de surveillance la nuit. Sans pilote, les drones restent au sol.',
   assistant: 'Pendant tes sessions, restaure une autre œuvre de l\'atelier, à une fraction de ton rythme.',
   mediateur: 'Guide les visiteurs et anime les salles. Ils repartent plus satisfaits, et la réputation suit.',
@@ -522,5 +524,75 @@ export function ficheSalle(app, lieu) {
         }),
         !installes.length && !agents.length ? ligne('Rien : ni matériel, ni agent') : null),
       bloc('Installer', possibles.length ? possibles.map(ligneMateriel) : ligne('Tout est installé'))),
+  });
+}
+
+/* ---------- Enquêtes ---------- */
+
+/**
+ * Dossier d'une œuvre volée : la chance de la police, les détectives en
+ * mission, ceux que l'on peut engager (chance par semaine, tarif, durée), et
+ * la piste en attente s'il y en a une.
+ */
+export function ficheDossier(app, oeuvreId) {
+  const { jeu } = app;
+  const cfg = jeu.cfg;
+  const e = jeu.etat;
+  const jour = jeu.jour();
+  const o = e.oeuvres[oeuvreId];
+  if (!o || o.lieu !== 'volee') return;
+  const restant = cfg.securite.enqueteSemaines - Math.floor((jour - o.voleeLe) / 7);
+  const enMission = (e.detectives?.carnet || []).filter((d) => d.mission?.oeuvre === o.id);
+  const libres = detectivesLibres(e, jour).sort((a, b) => chanceDetective(cfg, b) - chanceDetective(cfg, a));
+  const piste = (e.pistes || []).find((x) => x.oeuvre === o.id && x.expire > jour);
+  const sansRien = 1 - (1 - chancePolice(cfg, e, o)) * enMission.reduce((q, d) => q * (1 - chanceDetective(cfg, d)), 1);
+  let f = null;
+  const recharger = (ok) => { if (ok) { const x = app.jeu.etat.oeuvres[oeuvreId]; if (x?.lieu === 'volee') ficheDossier(app, oeuvreId); } };
+
+  const ligneDetective = (d) => {
+    const n = niveauDetective(cfg, d);
+    return h('div.detective',
+      h('div.fiche-tete', portrait(d.nom), h('div',
+        h('b', d.nom, profilCourt(d).map((m) => h('span.puce', { classe: m.bon ? 'bon' : 'mauvais' }, m.texte))),
+        h('div.tres-discret', `Niveau ${n} · ${pct(chanceDetective(cfg, d))} par semaine · ${decimale(tarifDetective(cfg, e, d))} ✦ la semaine`))),
+      h('div.durees', cfg.detectives.durees.map((sem) => {
+        const prix = forfait(cfg, e, d, sem);
+        return h('button.bouton.petit', {
+          type: 'button', disabled: app.solde !== null && app.solde < prix,
+          onclick: async () => {
+            if (!(await confirmer(`Engager ${d.nom}`, { texte: `${sem} semaines · ${nombre(prix)} ✦`, oui: 'Engager' }))) return;
+            f.fermer();
+            recharger(await app.agir('engagerDetective', { oeuvre: o.id, detective: d.id, semaines: sem }, { succes: `${d.nom} sur l'affaire` }));
+          },
+        }, `${sem} sem. · ${nombre(prix)} ✦`);
+      })));
+  };
+
+  f = feuille({
+    titre: o.titre,
+    contenu: h('div.fiche',
+      h('div.fiche-risque', h('b', pct(sansRien)), h('span', `de la retrouver cette semaine · encore ${restant} semaines`)),
+      piste ? bloc(`Piste à ${piste.ville}`,
+        ligne(`Une œuvre qui lui ressemble est apparue dans une vente. Réponse avant le ${dateJour(piste.expire)}.`),
+        h('div.rangee-boutons',
+          h('button.bouton.or', {
+            type: 'button', disabled: app.solde !== null && app.solde < piste.prix,
+            onclick: async () => {
+              if (!(await confirmer('Racheter discrètement ?', { texte: `${nombre(piste.prix)} ✦`, oui: 'Racheter' }))) return;
+              f.fermer();
+              await app.agir('racheterPiste', { piste: piste.id }, { succes: `${o.titre} revient` });
+            },
+          }, `Racheter · ${nombre(piste.prix)} ✦`),
+          h('button.bouton', {
+            type: 'button',
+            onclick: async () => { f.fermer(); recharger(await app.agir('prevenirPolice', { piste: piste.id }, { succes: 'La police est prévenue' })); },
+          }, 'Prévenir la police'))) : null,
+      bloc('Sur l\'affaire',
+        h('div.fiche-ecart', h('span', 'Police'), h('span.nombre', `${pct(chancePolice(cfg, e, o))} par semaine`)),
+        enMission.map((d) => h('div.fiche-ecart', h('span', `${d.nom} · niveau ${niveauDetective(cfg, d)}`),
+          h('span.nombre', `${pct(chanceDetective(cfg, d))} · jusqu'au ${dateJour(d.mission.fin)}`)))),
+      bloc('Engager un détective',
+        ligne(`Payé d'avance ; ${nombre(prime(cfg, o))} ✦ de prime à celui qui la ramène, réglés avec la session suivante.`),
+        libres.length ? libres.map(ligneDetective) : ligne('Aucun détective disponible : nouveaux candidats lundi'))),
   });
 }

@@ -96,8 +96,6 @@ export function effetsPersonnel(cfg, etat) {
   }
   const tech = meilleur('technicien');
   if (tech) e.technicien = (r('technicien').materielBase + r('technicien').materielNiveau * tech.niveau) * efficacite(tech);
-  const enq = meilleur('enqueteur');
-  if (enq) e.enquete += (r('enqueteur').enqueteBase + r('enqueteur').enqueteNiveau * enq.niveau) * efficacite(enq);
   const med = r('mediateur');
   e.satisfaction = Math.min(med.plafondTotal ?? Infinity,
     de('mediateur').reduce((s, x) => s + (med.satisfactionBase + med.satisfactionNiveau * x.niveau) * efficacite(x), 0));
@@ -154,7 +152,6 @@ export function effetTexte(cfg, { role: id, niveau }) {
     case 'veilleur': case 'surete': case 'operateur': case 'maitreChien': case 'pilote': return menaces();
     case 'technicien': return `Matériel électronique +${pc(r.materielBase + r.materielNiveau * niveau)}`;
     case 'chefSecurite': return `Protection humaine +${pc(r.humainBase + r.humainNiveau * niveau)}`;
-    case 'enqueteur': return `Œuvres volées retrouvées +${pc(r.enqueteBase + r.enqueteNiveau * niveau)} par semaine`;
     case 'assistant': return `${pc(partAssistant(cfg, niveau))} de ton travail, jusqu'à ${pc(r.plafond)}`;
     case 'mediateur': return `Satisfaction +${(r.satisfactionBase + r.satisfactionNiveau * niveau).toLocaleString('fr-FR')}`;
     case 'accueil': return `Affluence +${pc(r.densiteBase + r.densiteNiveau * niveau)}`;

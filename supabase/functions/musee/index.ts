@@ -91,14 +91,58 @@ var CONFIG = {
     bonusStatut: 5,
     bonusPret: 1
   },
+  // Charges de fin de session (docs/ECONOMIE.md, section 1). Le billet est
+  // encaissé en entier ; chaque dépense est retirée en clair, par heure de
+  // session, figée au lancement comme les recettes. Rien ne se paie hors
+  // session.
+  charges: {
+    // Coût d'un visiteur (ménage, énergie, billetterie), selon le statut.
+    accueil: [0.6, 0.65, 0.7, 0.72, 0.74, 0.76],
+    // Entretien : par espace public et par aile, × grille du statut.
+    entretien: { espace: 5, aile: 5, grille: [0.4, 2, 5, 15, 20, 20] },
+    // Assurance : part de la valeur exposée par heure, majorée selon le
+    // risque de la semaine ; un vol est remboursé à hauteur de `indemnite`.
+    assurance: { taux: 12e-4, risque: 10, indemnite: 0.5 },
+    // Fournitures par heure, selon le niveau de l'œuvre restaurée.
+    fournitures: [0, 2, 8, 30, 100, 300]
+  },
+  // Usure des œuvres exposées (docs/ECONOMIE.md, section 4) : `parJour` par
+  // jour de visite (la moitié en près de trois mois), `effet` sur l'attrait
+  // à usure complète. Au-delà de `maxExposable`, l'œuvre ne s'accroche plus.
+  // Le vandalisme ajoute de `vandalisme[0]` à `vandalisme[1]` d'usure ; une
+  // œuvre retrouvée revient usée au moins de `retrouvee`.
+  usure: { parJour: 5e-3, effet: 0.4, aReparer: 0.4, maxExposable: 0.8, vandalisme: [0.4, 0.8], retrouvee: 0.6 },
+  // Travaux d'atelier menés par les restaurateurs (les assistants), en vrai
+  // temps. Jours = charge du niveau × ampleur / vitesse, ampleur = `ravivage`
+  // + `parUsure` × usure pour une réparation. Vitesse = base + niveau × pas,
+  // × efficacité. Une œuvre restée `reposPriveeJours` en collection privée
+  // retrouve tout son attrait de nouveauté.
+  atelier: {
+    joursBase: [1, 1, 1.5, 2, 2.5, 3],
+    ravivage: 0.5,
+    parUsure: 1.5,
+    seuilReparation: 0.1,
+    vitesseBase: 0.8,
+    vitesseNiveau: 0.1,
+    reposPriveeJours: 15,
+    // Attrait de nouveauté d'une œuvre ravivée (atelier ou repos) : moins
+    // que celui d'une nouvelle acquisition ou d'un retour de prêt.
+    nouveaute: 1.4
+  },
+  // La cote du musée : plus il est connu, plus les vendeurs demandent cher.
+  cote: [1, 1, 1, 1.3, 1.8, 2.5],
+  // Chantiers : un agrandissement payé sort de terre pendant les sessions,
+  // en heures de session ; tant qu'un chantier dure, le musée accueille
+  // `malus` de ses visiteurs.
+  chantiers: { heures: { salle: 4, aile: 10, agrandissement: 2, espace: 6 }, malus: 0.9 },
   // `niveauMax` : plus haut niveau d'œuvre proposé dans les arrivages.
   statuts: [
-    { id: 0, nom: "Galerie de quartier", seuil: 0, part: 0.05, niveauMax: 1, ateliers: 1 },
-    { id: 1, nom: "Mus\xE9e municipal", seuil: 2e4, part: 0.1, niveauMax: 2, ateliers: 2 },
-    { id: 2, nom: "Mus\xE9e r\xE9gional", seuil: 15e4, part: 0.15, niveauMax: 2, ateliers: 2, prets: true, arrivagesGraphiques: true },
-    { id: 3, nom: "Mus\xE9e national", seuil: 1e6, part: 0.25, niveauMax: 3, ateliers: 3, expositions: true },
-    { id: 4, nom: "Mus\xE9e international", seuil: 3e6, part: 0.35, niveauMax: 4, ateliers: 3 },
-    { id: 5, nom: "Mus\xE9e universel", seuil: 6e6, part: 0.5, niveauMax: 5, ateliers: 4 }
+    { id: 0, nom: "Galerie de quartier", seuil: 0, niveauMax: 1, ateliers: 1 },
+    { id: 1, nom: "Mus\xE9e municipal", seuil: 2e4, niveauMax: 2, ateliers: 2 },
+    { id: 2, nom: "Mus\xE9e r\xE9gional", seuil: 15e4, niveauMax: 2, ateliers: 2, prets: true, arrivagesGraphiques: true },
+    { id: 3, nom: "Mus\xE9e national", seuil: 1e6, niveauMax: 3, ateliers: 3, expositions: true },
+    { id: 4, nom: "Mus\xE9e international", seuil: 3e6, niveauMax: 4, ateliers: 3 },
+    { id: 5, nom: "Mus\xE9e universel", seuil: 6e6, niveauMax: 5, ateliers: 4 }
   ],
   frequentation: { joursMoyenne: 7, joursAnnee: 365 },
   batiment: {
@@ -108,7 +152,9 @@ var CONFIG = {
     salle: { prix: 500, facteur: 1.35, places: 6 },
     agrandissement: { places: 3, max: 15, prix: [400, 1200, 3600] },
     reserve: { places: 10, prix: 200, facteur: 2 },
-    privee: { places: 3, prix: 300, facteur: 2 }
+    privee: { places: 3, prix: 300, facteur: 2 },
+    // Emplacements d'atelier en plus de ceux du statut.
+    atelier: { prix: 2e3, facteur: 3, max: 4 }
   },
   // Espaces publics particuliers. `supports` : ce qu'on peut y accrocher.
   espaces: {
@@ -131,21 +177,14 @@ var CONFIG = {
     { id: "imagerie", categorie: "atelier", nom: "Laboratoire d'imagerie", prix: 5e4, effets: { efficacite: 0.1 } },
     { id: "bibliotheque", categorie: "documentation", nom: "Biblioth\xE8que", prix: 3e3, effets: { revele: 1, remise: 0.1 } },
     { id: "archives", categorie: "documentation", nom: "Archives", prix: 25e3, prerequis: "bibliotheque", effets: { revele: 2, remise: 0.2 } },
-    // Matériel de sécurité (docs/ECONOMIE.md, section 3). `nuit`, `jour`,
-    // `vandalisme` : protection contre chaque menace. `electronique` : renforcé
-    // par le technicien. `requiert` : métier sans lequel le matériel ne donne
-    // que la part `sans` de sa protection.
-    { id: "serrures", categorie: "securite", nom: "Serrures renforc\xE9es", prix: 300, effets: { nuit: 5 } },
-    { id: "alarme", categorie: "securite", nom: "Alarme", prix: 2e3, statutMin: 1, effets: { nuit: 20, electronique: true } },
-    { id: "video", categorie: "securite", nom: "Vid\xE9osurveillance", prix: 8e3, statutMin: 2, effets: { nuit: 30, jour: 30, electronique: true, requiert: "operateur", sans: 0.5 } },
-    { id: "portiques", categorie: "securite", nom: "Portiques de d\xE9tection", prix: 6e3, statutMin: 2, effets: { jour: 10, vandalisme: 30, electronique: true } },
-    { id: "salleForte", categorie: "securite", nom: "Salle forte", prix: 12e3, statutMin: 2, effets: { salleForte: true } },
+    // Matériel de sécurité commun à tout le musée (docs/ECONOMIE.md, section
+    // 3) : les portiques de l'entrée, le poste central, le chenil, les
+    // drones. Le reste s'installe salle par salle (`materielSalle`).
+    // `requiert` : métier sans lequel le matériel ne donne que la part `sans`.
+    { id: "portiques", categorie: "securite", nom: "Portiques de d\xE9tection", prix: 6e3, statutMin: 2, effets: { vandalisme: 15, electronique: true } },
     { id: "chenil", categorie: "securite", nom: "Chenil", prix: 1e4, statutMin: 3, effets: {} },
-    { id: "vitrines", categorie: "securite", nom: "Vitrines s\xE9curis\xE9es", prix: 25e3, statutMin: 3, effets: { jour: 80, vandalisme: 120 } },
-    { id: "pcSecurite", categorie: "securite", nom: "Poste central de s\xE9curit\xE9", prix: 3e4, statutMin: 3, effets: { nuit: 20, jour: 20 } },
-    { id: "securite1", categorie: "securite", nom: "S\xE9curit\xE9 niveau 1", prix: 4e4, statutMin: 4, effets: { securite: 1, nuit: 200, jour: 100, vandalisme: 60 } },
-    { id: "drones", categorie: "securite", nom: "Drones de surveillance", prix: 6e4, statutMin: 4, effets: { nuit: 120, electronique: true, requiert: "pilote", sans: 0 } },
-    { id: "securite2", categorie: "securite", nom: "S\xE9curit\xE9 niveau 2", prix: 15e4, statutMin: 5, prerequis: "securite1", effets: { securite: 2, nuit: 500, jour: 300, vandalisme: 300 } }
+    { id: "pcSecurite", categorie: "securite", nom: "Poste central de s\xE9curit\xE9", prix: 3e4, statutMin: 3, effets: {} },
+    { id: "drones", categorie: "securite", nom: "Drones de surveillance", prix: 6e4, statutMin: 4, effets: { vol: 40, electronique: true, requiert: "pilote", sans: 0 } }
   ],
   // Niveau de sécurité requis pour exposer un niveau d'œuvre.
   securiteRequise: { 4: 1, 5: 2 },
@@ -213,7 +252,7 @@ var CONFIG = {
     // Niveau maximal d'un candidat selon le statut du musée.
     niveauCandidatMax: [2, 3, 4, 6, 8, 10],
     fraisRecrutementHeures: 10,
-    // Au-delà de ce retard (en heures de masse salariale), on ne recrute plus.
+    // Au-delà de ce retard (en heures de salaires et d'entretien), on ne recrute plus.
     arrieresToleresHeures: 10,
     // Deux personnes de même niveau ne se valent pas. Efficacité tirée en
     // cloche entre min et max (moyenne 1), appliquée à tout ce qu'apporte la
@@ -222,17 +261,17 @@ var CONFIG = {
     // élevés. Moyennes de 1 : l'équilibrage d'ensemble ne bouge pas.
     profil: { efficaciteMin: 0.75, efficaciteMax: 1.25, suit: 0.6, ecart: 0.3, salaireMin: 0.75, salaireMax: 1.3 },
     roles: [
-      // Sécurité. `menaces` : protection par niveau contre chaque menace ;
-      // `equipement` : matériel sans lequel le métier n'existe pas.
-      { id: "gardien", nom: "Gardien de salle", pluriel: "Gardiens de salle", famille: "securite", statutMin: 0, base: 0.5, poids: 4, menaces: { nuit: 1, jour: 3 } },
-      { id: "veilleur", nom: "Veilleur de nuit", pluriel: "Veilleurs de nuit", famille: "securite", statutMin: 1, base: 0.5, poids: 2, menaces: { nuit: 6 } },
-      { id: "surete", nom: "Agent de s\xFBret\xE9", pluriel: "Agents de s\xFBret\xE9", famille: "securite", statutMin: 2, equipement: "portiques", base: 0.5, poids: 2, menaces: { jour: 2, vandalisme: 8 } },
-      { id: "operateur", nom: "Op\xE9rateur vid\xE9o", pluriel: "Op\xE9rateurs vid\xE9o", famille: "securite", statutMin: 2, equipement: "video", base: 0.6, poids: 2, menaces: { nuit: 4, jour: 4 } },
-      { id: "maitreChien", nom: "Ma\xEEtre-chien", pluriel: "Ma\xEEtres-chiens", famille: "securite", statutMin: 3, equipement: "chenil", base: 0.7, poids: 1, menaces: { nuit: 12 } },
+      // Sécurité. `menaces` : protection par niveau, partagée entre les salles
+      // que l'agent couvre ; `equipement` : matériel sans lequel le métier
+      // n'existe pas (global, ou installé dans au moins une salle).
+      { id: "gardien", nom: "Gardien de salle", pluriel: "Gardiens de salle", famille: "securite", statutMin: 0, base: 0.5, poids: 4, menaces: { vol: 4 } },
+      { id: "veilleur", nom: "Veilleur de nuit", pluriel: "Veilleurs de nuit", famille: "securite", statutMin: 1, base: 0.5, poids: 2, menaces: { vol: 6 } },
+      { id: "surete", nom: "Agent de s\xFBret\xE9", pluriel: "Agents de s\xFBret\xE9", famille: "securite", statutMin: 2, equipement: "portiques", base: 0.5, poids: 2, menaces: { vol: 2, vandalisme: 8 } },
+      { id: "operateur", nom: "Op\xE9rateur vid\xE9o", pluriel: "Op\xE9rateurs vid\xE9o", famille: "securite", statutMin: 2, equipement: "cameras", base: 0.6, poids: 2, menaces: { vol: 8 } },
+      { id: "maitreChien", nom: "Ma\xEEtre-chien", pluriel: "Ma\xEEtres-chiens", famille: "securite", statutMin: 3, equipement: "chenil", base: 0.7, poids: 1, menaces: { vol: 12 } },
       { id: "technicien", nom: "Technicien de s\xE9curit\xE9", pluriel: "Techniciens de s\xE9curit\xE9", famille: "securite", statutMin: 1, equipement: "alarme", base: 0.8, poids: 1, unique: true, materielBase: 0.1, materielNiveau: 0.03 },
       { id: "chefSecurite", nom: "Chef de la s\xE9curit\xE9", pluriel: "Chefs de la s\xE9curit\xE9", famille: "securite", statutMin: 3, equipement: "pcSecurite", base: 1.2, poids: 1, unique: true, humainBase: 0.1, humainNiveau: 0.03 },
-      { id: "enqueteur", nom: "Enqu\xEAteur", pluriel: "Enqu\xEAteurs", famille: "securite", statutMin: 3, base: 1, poids: 1, unique: true, enqueteBase: 0.03, enqueteNiveau: 0.015 },
-      { id: "pilote", nom: "Pilote de drone", pluriel: "Pilotes de drone", famille: "securite", statutMin: 4, equipement: "drones", base: 1, poids: 1, menaces: { nuit: 25 } },
+      { id: "pilote", nom: "Pilote de drone", pluriel: "Pilotes de drone", famille: "securite", statutMin: 4, equipement: "drones", base: 1, poids: 1, menaces: { vol: 25 } },
       { id: "assistant", nom: "Assistant restaurateur", pluriel: "Assistants restaurateurs", statutMin: 1, base: 1, poids: 2, partBase: 0.12, partNiveau: 0.03, plafond: 0.3 },
       { id: "mediateur", nom: "M\xE9diateur", pluriel: "M\xE9diateurs", statutMin: 0, base: 0.6, poids: 2, satisfactionBase: 1.5, satisfactionNiveau: 0.5, plafondTotal: 15 },
       { id: "accueil", nom: "Agent d'accueil", pluriel: "Agents d'accueil", statutMin: 0, base: 0.5, poids: 2, densiteBase: 0.06, densiteNiveau: 0.02 },
@@ -243,29 +282,72 @@ var CONFIG = {
       { id: "comptable", nom: "Comptable", pluriel: "Comptables", statutMin: 3, base: 1.2, poids: 1, unique: true, abattementBase: 0.05, abattementNiveau: 0.02 }
     ]
   },
-  // Sécurité (docs/ECONOMIE.md, section 3). Probabilité par semaine = base ×
-  // risque / (protection + plancher), bornée entre min et max. Un incident
-  // coûte `reputation` points tout de suite et `confiance` points durables
-  // (retirés des bonus permanents).
+  // Sécurité (docs/ECONOMIE.md, section 3), salle par salle. Chaque jour, à
+  // une heure tirée au hasard, chaque espace subit un tirage de vol et un de
+  // vandalisme : probabilité par jour = base × risque / (protection +
+  // plancher), bornée entre min et max. Le risque vient des œuvres de
+  // l'espace, la protection de son matériel et des agents qui le couvrent.
+  // Un incident coûte `reputation` points tout de suite et `confiance`
+  // points durables (retirés des bonus permanents).
   securite: {
     jourSemaine: 0,
-    // dimanche, 4 h
+    // l'enquête de la police, chaque dimanche
     menaces: {
-      nuit: { nom: "Cambriolage", base: 0.03, plancher: 5, min: 3e-3, max: 0.35, reputation: 3, confiance: 1 },
-      jour: { nom: "Vol en salle", base: 0.02, plancher: 5, min: 2e-3, max: 0.25, reputation: 2, confiance: 0.5, densiteRef: 100, affluenceMax: 3 },
-      vandalisme: { nom: "Vandalisme", base: 0.02, plancher: 20, min: 0, max: 0.2, reputation: 2, confiance: 0.5, exposant: 1.5, diviseur: 10, degatsMin: 0.15, degatsMax: 0.4 }
+      vol: { nom: "Vol", base: 35e-4, plancher: 4, min: 2e-4, max: 0.05, reputation: 3, confiance: 1 },
+      vandalisme: { nom: "Vandalisme", base: 3e-3, plancher: 15, min: 0, max: 0.03, reputation: 2, confiance: 0.5, exposant: 1.5, diviseur: 10 }
     },
-    // Poids d'une œuvre dans le risque de cambriolage selon son emplacement.
-    poids: { espace: 1, exposition: 1, privee: 0.8, reserve: 0.6, reserveForte: 0.2, atelier: 0.5 },
-    // Vol en salle : ce qui se glisse sous un manteau part plus facilement.
+    // Affluence : une salle bondée cache mieux un voleur (0,5 + densité / ref, plafonnée).
+    affluence: { densiteRef: 100, max: 3 },
+    // Poids d'une œuvre dans le risque de vol selon son emplacement.
+    poids: { espace: 1, exposition: 1, privee: 0, reserve: 0.6, reserveBlindee: 0.2, atelier: 0.5 },
+    // Ce qui se glisse sous un manteau part plus facilement.
     portabilite: { estampe: 2, photographie: 2, peinture: 1, sculpture: 0.5 },
+    // Un agent couvre au plus ce nombre de salles ; sa protection s'y partage.
+    sallesParAgent: 3,
     enquete: 0.07,
     enqueteSemaines: 26,
-    degats: 0.2,
-    // Risque maximal (par semaine, toutes menaces) qu'un prêteur accepte selon
-    // le niveau de l'œuvre empruntée pour une exposition.
+    // Risque maximal (par semaine, vol et vandalisme de la salle la plus
+    // exposée) qu'un prêteur accepte selon le niveau de l'œuvre empruntée.
     seuilsEmprunt: { 3: 0.05, 4: 0.03, 5: 0.015 }
   },
+  // Détectives (docs/ECONOMIE.md, section 3) : engagés par mission, payés
+  // d'avance à la semaine, `prime` du prix de l'œuvre à celui qui la ramène.
+  // Chance par semaine = (base + niveau × pas) × efficacité. Tarif par
+  // semaine = base × facteur^(niveau - 1) × grille du statut × prétention.
+  // Niveau : œuvres retrouvées (seuils `xp`).
+  detectives: {
+    candidatsParSemaine: 3,
+    tarifBase: 15,
+    tarifNiveau: 1.25,
+    chanceBase: 0.05,
+    chanceNiveau: 0.015,
+    xp: [1, 3, 6, 10, 15, 21, 28, 36, 45],
+    durees: [2, 4, 8],
+    prime: 0.05,
+    piste: {
+      probabilite: 0.15,
+      prixPart: 0.6,
+      joursReponse: 3,
+      bonusPolice: 0.15,
+      villes: ["Gen\xE8ve", "Anvers", "Londres", "Bruxelles", "Marseille", "Amsterdam", "Milan", "New York", "Hong Kong", "Vienne"]
+    }
+  },
+  // Matériel installé dans un espace précis. Son prix suit la taille de la
+  // salle (× places / 6). `vol`, `vandalisme` : protection de cet espace ;
+  // `electronique` : renforcé par le technicien ; `requiert` : agent affecté
+  // à la salle sans lequel il ne donne que `sans` ; `norme` : niveau de
+  // sécurité exigé pour accrocher Chefs-d'œuvre (1) et Trésors (2) ;
+  // `blindage` : la réserve n'attire presque plus les cambrioleurs ;
+  // `lieux` : espaces où il s'installe (salles publiques par défaut).
+  materielSalle: [
+    { id: "porte", nom: "Porte blind\xE9e", prix: 300, statutMin: 0, vol: 5, lieux: ["public", "reserve", "atelier"] },
+    { id: "alarme", nom: "Alarme", prix: 1500, statutMin: 1, vol: 15, electronique: true, lieux: ["public", "reserve", "atelier"] },
+    { id: "cameras", nom: "Cam\xE9ras", prix: 4e3, statutMin: 2, vol: 20, vandalisme: 15, electronique: true, requiert: "operateur", sans: 0.5, lieux: ["public", "reserve", "atelier"] },
+    { id: "vitrines", nom: "Vitrines s\xE9curis\xE9es", prix: 8e3, statutMin: 3, vol: 40, vandalisme: 60, lieux: ["public"] },
+    { id: "blindage", nom: "Blindage", prix: 12e3, statutMin: 2, blindage: true, lieux: ["reserve"] },
+    { id: "norme1", nom: "S\xE9curit\xE9 niveau 1", prix: 2e4, statutMin: 4, norme: 1, vol: 60, vandalisme: 30, lieux: ["public"] },
+    { id: "norme2", nom: "S\xE9curit\xE9 niveau 2", prix: 6e4, statutMin: 5, prerequis: "norme1", norme: 2, vol: 150, vandalisme: 100, lieux: ["public"] }
+  ],
   // Clé publique VAPID des notifications, la même que WikiDeck (publiée dans
   // son js/notifications.js) : les secrets d'Edge Function sont communs à tout
   // le projet Supabase, la clé privée y est déjà (VAPID_PRIVATE).
@@ -516,7 +598,7 @@ function borner(x, min, max) {
 // js/moteur/batiment.js
 function espacesPublics(etat) {
   const b = etat.batiment;
-  const liste = b.salles.map((s) => ({ ...s, type: "salle" }));
+  const liste = b.salles.filter((s) => !s.chantier).map((s) => ({ ...s, type: "salle" }));
   if (b.cabinet) liste.push({ ...b.cabinet, id: "cabinet", type: "cabinet" });
   if (b.jardin) liste.push({ ...b.jardin, id: "jardin", type: "jardin" });
   return liste;
@@ -544,12 +626,17 @@ function refusAccrochage(cfg, etat, oeuvre, espaceId) {
   const e = espace(etat, espaceId);
   if (!e) return "Espace inconnu";
   if (oeuvre.progression < 1) return "Restauration inachev\xE9e";
+  if (oeuvre.travaux) return "En travaux \xE0 l'atelier";
+  if ((oeuvre.usure || 0) >= (cfg.usure?.maxExposable ?? Infinity)) return "Trop ab\xEEm\xE9e : \xE0 r\xE9parer";
   if (!supportsEspace(cfg, e.type).includes(oeuvre.support)) {
     return oeuvre.support === "estampe" || oeuvre.support === "photographie" ? "R\xE9serv\xE9 au cabinet d'arts graphiques" : e.type === "jardin" ? "Sculptures uniquement" : "Support non exposable ici";
   }
   const requise = cfg.securiteRequise[oeuvre.niveau] || 0;
-  if (requise > effets(cfg, etat).securite) return `S\xE9curit\xE9 niveau ${requise} requise`;
+  if (requise > normeLieu(cfg, etat, espaceId)) return `S\xE9curit\xE9 niveau ${requise} requise dans cette salle`;
   return null;
+}
+function normeLieu(cfg, etat, lieu) {
+  return (etat.securite?.salles?.[lieu] || []).reduce((n, id) => Math.max(n, cfg.materielSalle?.find((m) => m.id === id)?.norme || 0), 0);
 }
 
 // js/moteur/alea.js
@@ -736,7 +823,10 @@ function role(cfg, id) {
   return cfg.personnel.roles.find((r) => r.id === id) || null;
 }
 function rolesOuverts(cfg, etat) {
-  return cfg.personnel.roles.filter((r) => r.statutMin <= etat.statut && (!r.equipement || (etat.investissements || []).includes(r.equipement)));
+  return cfg.personnel.roles.filter((r) => r.statutMin <= etat.statut && (!r.equipement || equipementPresent(etat, r.equipement)));
+}
+function equipementPresent(etat, id) {
+  return (etat.investissements || []).includes(id) || Object.values(etat.securite?.salles || {}).some((l) => l.includes(id));
 }
 function minutesPourNiveau(cfg, n) {
   return n <= 1 ? 0 : (cfg.personnel.experience[n - 2] ?? 0) * 60;
@@ -783,8 +873,6 @@ function effetsPersonnel(cfg, etat) {
   }
   const tech = meilleur("technicien");
   if (tech) e.technicien = (r("technicien").materielBase + r("technicien").materielNiveau * tech.niveau) * efficacite(tech);
-  const enq = meilleur("enqueteur");
-  if (enq) e.enquete += (r("enqueteur").enqueteBase + r("enqueteur").enqueteNiveau * enq.niveau) * efficacite(enq);
   const med = r("mediateur");
   e.satisfaction = Math.min(
     med.plafondTotal ?? Infinity,
@@ -854,6 +942,125 @@ function tirerCandidats(cfg, etat, jour) {
   return candidats;
 }
 
+// js/moteur/etat.js
+var FORMAT = 4;
+var MATERIEL_FORMAT_4 = {
+  serrures: ["porte", "public"],
+  alarme: ["alarme", "public"],
+  video: ["cameras", "public"],
+  vitrines: ["vitrines", "public"],
+  securite1: ["norme1", "public"],
+  securite2: ["norme2", "public"],
+  salleForte: ["blindage", "reserve"]
+};
+function migrer(etat, cfg = null) {
+  if (!etat || typeof etat !== "object" || !etat.batiment || !etat.oeuvres) {
+    throw new Error("\xC9tat du mus\xE9e illisible");
+  }
+  if ((etat.format || 0) > FORMAT) throw new Error("\xC9tat produit par une version plus r\xE9cente");
+  const e = { ...etat };
+  if ((e.format || 1) < 2) {
+    const anciens = e.investissements || [];
+    const employes2 = [];
+    const jour = e.jourFerme + 1;
+    const ajouter = (role2, niveau2, i) => {
+      const id = `e${jour}-m${i}`;
+      const p = cfg ? personne(cfg, { id, role: role2, niveau: niveau2, graine: `${e.graine}:migration:${i}` }) : { id, nom: "?", role: role2, minutes: 0 };
+      const { niveau: _n, ...employe } = p;
+      employes2.push(employe);
+    };
+    ajouter("gardien", 1, 0);
+    if (anciens.includes("mediateurs")) ajouter("mediateur", 3, 1);
+    if (anciens.includes("conservateur")) ajouter("conservateur", 3, 2);
+    e.investissements = anciens.filter((i) => i !== "mediateurs" && i !== "conservateur");
+    e.personnel = e.personnel || { employes: employes2, candidats: [], arrieres: 0 };
+    if (cfg && !e.personnel.candidats.length) e.personnel.candidats = tirerCandidats(cfg, e, jour);
+    e.securite = e.securite || { historique: [] };
+  }
+  if ((e.format || 1) < 3) {
+    for (const x of e.personnel?.employes || []) if (x.role === "securite") x.role = "veilleur";
+    if (e.personnel) e.personnel.candidats = (e.personnel.candidats || []).map((c) => c.role === "securite" ? { ...c, role: "veilleur" } : c);
+  }
+  if ((e.format || 1) < 4) {
+    const valeur = (id) => Object.values(e.oeuvres).filter((o) => o.lieu === "espace" && o.espace === id).reduce((s, o) => s + (cfg?.niveaux?.[o.niveau]?.prestige ?? 1), 0);
+    const salles = (e.batiment?.salles || []).map((s) => s.id).sort((a, b) => valeur(b) - valeur(a));
+    const precieuse = salles[0] || "s1";
+    e.securite = { historique: [], ...e.securite || {}, salles: { ...e.securite?.salles || {} } };
+    const garde = [];
+    for (const ancien of e.investissements || []) {
+      const cible = MATERIEL_FORMAT_4[ancien];
+      if (!cible) {
+        garde.push(ancien);
+        continue;
+      }
+      const lieu = cible[1] === "reserve" ? "reserve" : precieuse;
+      e.securite.salles[lieu] = [.../* @__PURE__ */ new Set([...e.securite.salles[lieu] || [], cible[0]])];
+    }
+    e.investissements = garde;
+    const enqueteurs = (e.personnel?.employes || []).filter((x) => x.role === "enqueteur");
+    if (enqueteurs.length) {
+      e.detectives = e.detectives || { carnet: [], candidats: [] };
+      for (const x of enqueteurs) e.detectives.carnet.push({ id: `d-${x.id}`, nom: x.nom, xp: 0, efficacite: x.efficacite ?? 1, salaire: x.salaire ?? 1 });
+      e.personnel.employes = e.personnel.employes.filter((x) => x.role !== "enqueteur");
+    }
+    let rang = 0;
+    for (const x of e.personnel?.employes || []) {
+      if (x.affectation) continue;
+      if (x.role === "gardien") x.affectation = [salles[rang++ % Math.max(1, salles.length)] || "s1"];
+      else if (["veilleur", "surete", "operateur", "maitreChien", "pilote"].includes(x.role)) x.affectation = [precieuse];
+    }
+  }
+  e.format = FORMAT;
+  return e;
+}
+function copie(etat) {
+  return typeof structuredClone === "function" ? structuredClone(etat) : JSON.parse(JSON.stringify(etat));
+}
+function evenement(etat, jour, type, donnees = {}) {
+  const id = `${type}:${jour}:${etat.evenements.length}`;
+  etat.evenements.push({ id, jour, type, ...donnees, notifie: false });
+  if (etat.evenements.length > 200) etat.evenements = etat.evenements.slice(-200);
+}
+
+// js/moteur/lieux.js
+function ravivage(cfg) {
+  return joursPourNouveaute(cfg, cfg.atelier?.nouveaute ?? cfg.visiteurs.nouveaute.depart);
+}
+function sortirDuPublic(o, jour) {
+  o.sortieLe = jour;
+}
+
+// js/moteur/atelier.js
+var usure = (o) => o?.usure || 0;
+function facteurUsure(cfg, o) {
+  return 1 - usure(o) * (cfg.usure?.effet ?? 0);
+}
+function user(cfg, o) {
+  if (!cfg.usure) return;
+  o.usure = Math.min(1, Math.round((usure(o) + cfg.usure.parJour) * 1e4) / 1e4);
+}
+function abimer(o, quantite) {
+  o.usure = Math.min(1, Math.round((usure(o) + quantite) * 1e4) / 1e4);
+}
+function finirTravaux(cfg, etat, J, ramener2) {
+  const faits = [];
+  for (const o of Object.values(etat.oeuvres)) {
+    if (!o.travaux || o.travaux.fin > J) continue;
+    const t = o.travaux;
+    delete o.travaux;
+    o.usure = 0;
+    o.ravivee = true;
+    ramener2(cfg, etat, o.id, J);
+    if (o.lieu === "espace") {
+      o.joursExpo = Math.min(o.joursExpo || 0, ravivage(cfg));
+      delete o.ravivee;
+    }
+    evenement(etat, J, "atelier", { oeuvre: o.id, titre: o.titre, travaux: t.type });
+    faits.push({ type: "atelier", oeuvre: o.id, titre: o.titre, travaux: t.type, lieu: o.lieu });
+  }
+  return faits;
+}
+
 // js/moteur/visiteurs.js
 function espacesOuverts(cfg, etat, jour) {
   const aGarder = [];
@@ -867,9 +1074,18 @@ function espacesOuverts(cfg, etat, jour) {
     aGarder.push({ id: "exposition", valeur });
   }
   aGarder.sort((a, b) => b.valeur - a.valeur || String(a.id).localeCompare(String(b.id)));
-  const gardiens = effetsPersonnel(cfg, etat).gardiens;
-  const ouverts = new Set(aGarder.slice(0, gardiens).map((e) => e.id));
-  return { ouverts, aGarder: aGarder.length, fermes: aGarder.slice(gardiens).map((e) => e.id) };
+  const gardiens = employes(etat, "gardien");
+  const couverts = new Set(gardiens.flatMap((g) => g.affectation || []));
+  let libres = gardiens.filter((g) => !(g.affectation || []).length).length;
+  const ouverts = /* @__PURE__ */ new Set();
+  for (const e of aGarder) {
+    if (couverts.has(e.id)) ouverts.add(e.id);
+    else if (libres > 0) {
+      ouverts.add(e.id);
+      libres--;
+    }
+  }
+  return { ouverts, aGarder: aGarder.length, fermes: aGarder.filter((e) => !ouverts.has(e.id)).map((e) => e.id) };
 }
 function effetCampagnes(cfg, etat, jour) {
   const c = etat.campagne;
@@ -889,7 +1105,7 @@ function apports(cfg, etat, jour) {
     liste.push({
       id: o.id,
       espace: e.id,
-      valeur: cfg.visiteurs.parPrestige * prestige(cfg, o.niveau) * nouveaute(cfg, o.joursExpo) * coherence * attrait
+      valeur: cfg.visiteurs.parPrestige * prestige(cfg, o.niveau) * nouveaute(cfg, o.joursExpo) * coherence * attrait * facteurUsure(cfg, o)
     });
   }
   const expo = etat.expositions?.courante;
@@ -917,7 +1133,8 @@ function apports(cfg, etat, jour) {
   return liste;
 }
 function multiplicateurGlobal(cfg, etat, jour) {
-  return facteurReputation(cfg, etat.reputation) * facteurPrix(cfg, etat.prixBillet, etat.reputation) * effetCampagnes(cfg, etat, jour);
+  const travaux = (etat.chantiers || []).length ? cfg.chantiers?.malus ?? 1 : 1;
+  return facteurReputation(cfg, etat.reputation) * facteurPrix(cfg, etat.prixBillet, etat.reputation) * effetCampagnes(cfg, etat, jour) * travaux;
 }
 function visiteursDuJour(cfg, etat, jour) {
   const total = apports(cfg, etat, jour).reduce((s, a) => s + a.valeur, 0);
@@ -970,104 +1187,93 @@ function reputationSuivante(cfg, etat, sat) {
   return borner(etat.reputation + cfg.reputation.vitesse * (cible - etat.reputation), 0, cfg.reputation.max);
 }
 
-// js/moteur/etat.js
-var FORMAT = 3;
-function migrer(etat, cfg = null) {
-  if (!etat || typeof etat !== "object" || !etat.batiment || !etat.oeuvres) {
-    throw new Error("\xC9tat du mus\xE9e illisible");
-  }
-  if ((etat.format || 0) > FORMAT) throw new Error("\xC9tat produit par une version plus r\xE9cente");
-  const e = { ...etat };
-  if ((e.format || 1) < 2) {
-    const anciens = e.investissements || [];
-    const employes2 = [];
-    const jour = e.jourFerme + 1;
-    const ajouter = (role2, niveau2, i) => {
-      const id = `e${jour}-m${i}`;
-      const p = cfg ? personne(cfg, { id, role: role2, niveau: niveau2, graine: `${e.graine}:migration:${i}` }) : { id, nom: "?", role: role2, minutes: 0 };
-      const { niveau: _n, ...employe } = p;
-      employes2.push(employe);
-    };
-    ajouter("gardien", 1, 0);
-    if (anciens.includes("mediateurs")) ajouter("mediateur", 3, 1);
-    if (anciens.includes("conservateur")) ajouter("conservateur", 3, 2);
-    e.investissements = anciens.filter((i) => i !== "mediateurs" && i !== "conservateur");
-    e.personnel = e.personnel || { employes: employes2, candidats: [], arrieres: 0 };
-    if (cfg && !e.personnel.candidats.length) e.personnel.candidats = tirerCandidats(cfg, e, jour);
-    e.securite = e.securite || { historique: [] };
-  }
-  if ((e.format || 1) < 3) {
-    for (const x of e.personnel?.employes || []) if (x.role === "securite") x.role = "veilleur";
-    if (e.personnel) e.personnel.candidats = (e.personnel.candidats || []).map((c) => c.role === "securite" ? { ...c, role: "veilleur" } : c);
-  }
-  e.format = FORMAT;
-  return e;
-}
-function copie(etat) {
-  return typeof structuredClone === "function" ? structuredClone(etat) : JSON.parse(JSON.stringify(etat));
-}
-function evenement(etat, jour, type, donnees = {}) {
-  const id = `${type}:${jour}:${etat.evenements.length}`;
-  etat.evenements.push({ id, jour, type, ...donnees, notifie: false });
-  if (etat.evenements.length > 200) etat.evenements = etat.evenements.slice(-200);
-}
-
-// js/moteur/lieux.js
-function sortirDuPublic(o, jour) {
-  o.sortieLe = jour;
-}
-
 // js/moteur/securite.js
-var MENACES = ["nuit", "jour", "vandalisme"];
-function salleForte(cfg, etat) {
-  return (etat.investissements || []).some((id) => cfg.investissements.find((i) => i.id === id)?.effets?.salleForte);
+var MENACES = ["vol", "vandalisme"];
+function lieuxSecurises(cfg, etat) {
+  const l = espacesPublics(etat).map((e) => ({ id: e.id, nom: e.nom || cfg.espaces[e.type]?.nom || e.id, type: "public", places: e.places }));
+  if (etat.batiment.exposition) l.push({ id: "exposition", nom: cfg.espaces.exposition.nom, type: "exposition", places: etat.batiment.exposition.places });
+  l.push({ id: "reserve", nom: "R\xE9serve", type: "reserve", places: etat.batiment.reserve.places });
+  l.push({ id: "atelier", nom: "Atelier", type: "atelier", places: 6 });
+  return l;
 }
-function poidsNuit(cfg, etat, o) {
-  const p = cfg.securite.poids;
-  if (o.lieu === "reserve") return salleForte(cfg, etat) ? p.reserveForte : p.reserve;
-  return p[o.lieu] ?? 0;
+function materielDe(etat, lieu) {
+  return etat.securite?.salles?.[lieu] || [];
 }
-var exposee = (o) => o.lieu === "espace" || o.lieu === "exposition";
+var publicOuExpo = (type) => type === "public" || type === "exposition";
+var affectation = (x) => x.affectation || [];
+function lieuOeuvre(o) {
+  if (o.lieu === "espace") return o.espace;
+  if (o.lieu === "exposition" || o.lieu === "reserve" || o.lieu === "atelier") return o.lieu;
+  return null;
+}
 function affluence(cfg, etat, jour) {
-  const m = cfg.securite.menaces.jour;
+  const a = cfg.securite.affluence;
   const places = placesPubliques(etat);
   if (!places) return 0.5;
   const densite = visiteursDuJour(cfg, etat, jour ?? etat.jourFerme + 1) / places;
-  return Math.min(m.affluenceMax, 0.5 + densite / m.densiteRef);
+  return Math.min(a.max, 0.5 + densite / a.densiteRef);
 }
-function risques(cfg, etat, jour) {
+function poidsVol(cfg, etat, o, type, aff) {
   const s = cfg.securite;
-  const v = s.menaces.vandalisme;
-  const emprunts = etat.expositions?.courante?.emprunts || [];
-  const celebrite = (n) => prestige(cfg, n) ** v.exposant / v.diviseur;
-  let nuit = 0;
-  let enSalle = 0;
-  let vandalisme = 0;
+  if (publicOuExpo(type)) return (s.portabilite[o.support] ?? 1) * aff;
+  if (type === "reserve") return materielDe(etat, "reserve").some((id) => cfg.materielSalle.find((m) => m.id === id)?.blindage) ? s.poids.reserveBlindee : s.poids.reserve;
+  return s.poids[type] ?? 0;
+}
+var celebrite = (cfg, n) => prestige(cfg, n) ** cfg.securite.menaces.vandalisme.exposant / cfg.securite.menaces.vandalisme.diviseur;
+function risques(cfg, etat, jour) {
+  const lieux = lieuxSecurises(cfg, etat);
+  const types = new Map(lieux.map((l) => [l.id, l.type]));
+  const r = Object.fromEntries(lieux.map((l) => [l.id, { vol: 0, vandalisme: 0 }]));
+  const aff = affluence(cfg, etat, jour);
   for (const o of Object.values(etat.oeuvres)) {
-    nuit += prestige(cfg, o.niveau) * poidsNuit(cfg, etat, o);
-    if (exposee(o)) {
-      enSalle += prestige(cfg, o.niveau) * (s.portabilite[o.support] ?? 1);
-      vandalisme += celebrite(o.niveau);
-    }
+    const l = lieuOeuvre(o);
+    if (!l || !r[l]) continue;
+    const type = types.get(l);
+    r[l].vol += prestige(cfg, o.niveau) * poidsVol(cfg, etat, o, type, aff);
+    if (publicOuExpo(type)) r[l].vandalisme += celebrite(cfg, o.niveau);
   }
-  for (const em of emprunts) {
-    nuit += prestige(cfg, em.niveau) * s.poids.exposition;
-    enSalle += prestige(cfg, em.niveau) * (s.portabilite[em.support] ?? 1);
-    vandalisme += celebrite(em.niveau);
+  for (const em of etat.expositions?.courante?.emprunts || []) {
+    if (!r.exposition) continue;
+    r.exposition.vol += prestige(cfg, em.niveau) * (cfg.securite.portabilite[em.support] ?? 1) * aff;
+    r.exposition.vandalisme += celebrite(cfg, em.niveau);
   }
-  return { nuit, jour: enSalle ? enSalle * affluence(cfg, etat, jour) : 0, vandalisme };
+  return r;
 }
 function protections(cfg, etat) {
   const ep = effetsPersonnel(cfg, etat);
-  const p = { nuit: ep.menaces.nuit, jour: ep.menaces.jour, vandalisme: ep.menaces.vandalisme };
+  const lieux = lieuxSecurises(cfg, etat);
+  const p = Object.fromEntries(lieux.map((l) => [l.id, { vol: 0, vandalisme: 0 }]));
+  const equipe = avecNiveaux(cfg, etat);
+  const chef = role(cfg, "chefSecurite");
+  const meilleurChef = equipe.filter((x) => x.role === "chefSecurite").reduce((m, x) => !m || x.niveau * efficacite(x) > m.niveau * efficacite(m) ? x : m, null);
+  const kChef = meilleurChef ? 1 + (chef.humainBase + chef.humainNiveau * meilleurChef.niveau) * efficacite(meilleurChef) : 1;
+  const presents = (lieu, metier) => equipe.some((x) => x.role === metier && affectation(x).includes(lieu));
+  for (const l of lieux) {
+    for (const id of materielDe(etat, l.id)) {
+      const m = cfg.materielSalle.find((x) => x.id === id);
+      if (!m) continue;
+      let k = m.electronique ? 1 + ep.technicien : 1;
+      if (m.requiert && !presents(l.id, m.requiert)) k *= m.sans ?? 0;
+      for (const menace of MENACES) if (m[menace]) p[l.id][menace] += m[menace] * k;
+    }
+  }
   for (const id of etat.investissements || []) {
-    const inv = cfg.investissements.find((i) => i.id === id);
-    const f = inv?.effets;
-    if (!f) continue;
-    let k = 1;
-    if (f.electronique) k *= 1 + ep.technicien;
+    const f = cfg.investissements.find((i) => i.id === id)?.effets;
+    if (!f || !MENACES.some((m) => f[m])) continue;
+    let k = f.electronique ? 1 + ep.technicien : 1;
     if (f.requiert && !employes(etat, f.requiert).length) k *= f.sans ?? 0;
-    for (const m of MENACES) if (f[m]) p[m] += f[m] * k;
+    for (const l of lieux) {
+      if (f.vandalisme && publicOuExpo(l.type)) p[l.id].vandalisme += f.vandalisme * k;
+      if (f.vol) p[l.id].vol += f.vol * k;
+    }
+  }
+  for (const x of equipe) {
+    const menaces = role(cfg, x.role)?.menaces;
+    const couvre = affectation(x).filter((id) => p[id]);
+    if (!menaces || !couvre.length) continue;
+    for (const id of couvre) {
+      for (const [m, v] of Object.entries(menaces)) if (p[id][m] !== void 0) p[id][m] += v * x.niveau * efficacite(x) * kChef / couvre.length;
+    }
   }
   return p;
 }
@@ -1075,17 +1281,17 @@ function probabilites(cfg, etat, jour) {
   const r = risques(cfg, etat, jour);
   const s = protections(cfg, etat);
   const p = {};
-  for (const m of MENACES) {
-    const c = cfg.securite.menaces[m];
-    p[m] = r[m] > 0 ? borner(c.base * r[m] / (s[m] + c.plancher), c.min, c.max) : 0;
+  for (const [lieu, rl] of Object.entries(r)) {
+    p[lieu] = {};
+    for (const m of MENACES) {
+      const c = cfg.securite.menaces[m];
+      p[lieu][m] = rl[m] > 0 ? borner(c.base * rl[m] / (s[lieu][m] + c.plancher), c.min, c.max) : 0;
+    }
   }
   return p;
 }
-function chanceEnquete(cfg, etat) {
-  return Math.min(1, cfg.securite.enquete + effetsPersonnel(cfg, etat).enquete);
-}
 function retirer(etat, o, J) {
-  if (exposee(o)) sortirDuPublic(o, J);
+  if (o.lieu === "espace" || o.lieu === "exposition") sortirDuPublic(o, J);
   if (o.lieu === "exposition") {
     const x = etat.expositions.courante;
     if (x) x.oeuvres = x.oeuvres.filter((id) => id !== o.id);
@@ -1099,69 +1305,150 @@ function perdreReputation(cfg, etat, m) {
   etat.reputation = Math.max(0, etat.reputation - c.reputation);
   etat.bonusPermanents = (etat.bonusPermanents || 0) - (c.confiance || 0);
 }
-function voler(cfg, etat, J, m, o, p) {
-  retirer(etat, o, J);
-  o.lieu = "volee";
-  o.voleeLe = J;
-  perdreReputation(cfg, etat, m);
-  etat.securite.historique.push({ type: m === "nuit" ? "vol" : "volSalle", jour: J, oeuvre: o.id, titre: o.titre, niveau: o.niveau, probabilite: p });
-  evenement(etat, J, m === "nuit" ? "cambriolage" : "volSalle", { oeuvre: o.id, titre: o.titre });
-  return { type: m === "nuit" ? "cambriolage" : "volSalle", oeuvre: o.id, titre: o.titre };
-}
 function tirages(cfg, etat, J) {
-  const s = cfg.securite;
   const faits = [];
-  const ouSession = (o) => etat.session?.oeuvre !== o.id;
-  for (const m of MENACES) {
-    const alea = generateur(`${etat.graine}:${m}:${J}`);
-    const p = probabilites(cfg, etat, J)[m];
-    if (!(alea() < p)) continue;
-    const oeuvres = Object.values(etat.oeuvres).filter(ouSession);
-    if (m === "nuit") {
-      const o = choixPondere(oeuvres.map((x) => [x, prestige(cfg, x.niveau) * poidsNuit(cfg, etat, x)]), alea);
-      if (o) faits.push(voler(cfg, etat, J, m, o, p));
-    } else if (m === "jour") {
-      const o = choixPondere(oeuvres.filter(exposee).map((x) => [x, prestige(cfg, x.niveau) * (s.portabilite[x.support] ?? 1)]), alea);
-      if (o) faits.push(voler(cfg, etat, J, m, o, p));
-    } else {
-      const v = s.menaces.vandalisme;
-      const o = choixPondere(oeuvres.filter(exposee).map((x) => [x, prestige(cfg, x.niveau) ** v.exposant]), alea);
-      if (!o) continue;
-      const degats = v.degatsMin + (v.degatsMax - v.degatsMin) * alea();
-      retirer(etat, o, J);
-      o.lieu = "reserve";
-      o.progression = Math.max(0, o.progression - degats);
-      if (o.progression < 1) o.restaureeLe = null;
-      perdreReputation(cfg, etat, m);
-      etat.securite.historique.push({ type: "vandalisme", jour: J, oeuvre: o.id, titre: o.titre, niveau: o.niveau, degats, probabilite: p });
-      evenement(etat, J, "vandalisme", { oeuvre: o.id, titre: o.titre, degats: Math.round(degats * 100) });
-      faits.push({ type: "vandalisme", oeuvre: o.id, titre: o.titre, degats: Math.round(degats * 100) });
+  const p = probabilites(cfg, etat, J);
+  const lieux = lieuxSecurises(cfg, etat);
+  const aff = affluence(cfg, etat, J);
+  for (const l of lieux) {
+    for (const m of MENACES) {
+      if (!(p[l.id]?.[m] > 0)) continue;
+      const alea = generateur(`${etat.graine}:${m}:${l.id}:${J}`);
+      if (!(alea() < p[l.id][m])) continue;
+      const heure = entier(24, alea);
+      const ici = Object.values(etat.oeuvres).filter((o) => lieuOeuvre(o) === l.id && etat.session?.oeuvre !== o.id && !o.travaux);
+      if (m === "vol") {
+        const o = choixPondere(ici.map((x) => [x, prestige(cfg, x.niveau) * poidsVol(cfg, etat, x, l.type, aff)]), alea);
+        if (!o) continue;
+        retirer(etat, o, J);
+        o.lieu = "volee";
+        o.voleeLe = J;
+        perdreReputation(cfg, etat, m);
+        const taux = cfg.charges?.assurance?.indemnite || 0;
+        if (taux) etat.indemnites = (etat.indemnites || 0) + Math.round(niveau(cfg, o.niveau).prix * taux);
+        etat.securite.historique.push({ type: "vol", jour: J, heure, lieu: l.id, oeuvre: o.id, titre: o.titre, niveau: o.niveau, probabilite: p[l.id][m] });
+        evenement(etat, J, "cambriolage", { oeuvre: o.id, titre: o.titre, lieu: l.nom, heure });
+        faits.push({ type: "cambriolage", oeuvre: o.id, titre: o.titre, lieu: l.nom, heure });
+      } else {
+        const o = choixPondere(ici.map((x) => [x, celebrite(cfg, x.niveau)]), alea);
+        if (!o) continue;
+        const [min, max] = cfg.usure.vandalisme;
+        const degats = min + (max - min) * alea();
+        retirer(etat, o, J);
+        o.lieu = "reserve";
+        abimer(o, degats);
+        perdreReputation(cfg, etat, m);
+        etat.securite.historique.push({ type: "vandalisme", jour: J, heure, lieu: l.id, oeuvre: o.id, titre: o.titre, niveau: o.niveau, degats, probabilite: p[l.id][m] });
+        evenement(etat, J, "vandalisme", { oeuvre: o.id, titre: o.titre, lieu: l.nom, degats: Math.round(degats * 100) });
+        faits.push({ type: "vandalisme", oeuvre: o.id, titre: o.titre, lieu: l.nom, degats: Math.round(degats * 100) });
+      }
     }
   }
   return faits;
 }
-function enquete(cfg, etat, J) {
+
+// js/moteur/detectives.js
+function detectivesDe(etat) {
+  if (!etat.detectives) etat.detectives = { carnet: [], candidats: [] };
+  return etat.detectives;
+}
+function niveauDetective(cfg, d) {
+  let n = 1;
+  cfg.detectives.xp.forEach((x, i) => {
+    if ((d.xp || 0) >= x) n = i + 2;
+  });
+  return Math.min(cfg.detectives.xp.length + 1, n);
+}
+function chanceDetective(cfg, d) {
+  const c = cfg.detectives;
+  return Math.min(0.9, (c.chanceBase + c.chanceNiveau * niveauDetective(cfg, d)) * (d.efficacite ?? 1));
+}
+function prime(cfg, o) {
+  return Math.round(niveau(cfg, o.niveau).prix * cfg.detectives.prime);
+}
+function chancePolice(cfg, etat, o) {
+  const regisseur = effetsPersonnel(cfg, etat).regisseur?.enquete || 0;
+  return Math.min(1, cfg.securite.enquete + regisseur + (o.bonusPolice || 0));
+}
+function tirerDetectives(cfg, etat, J) {
+  const c = cfg.detectives;
+  const alea = generateur(`${etat.graine}:detectives:${J}`);
+  const max = Math.min(c.xp.length + 1, cfg.personnel.niveauCandidatMax[etat.statut] ?? 3);
+  const liste = [];
+  for (let i = 0; i < c.candidatsParSemaine; i++) {
+    const n = choixPondere(Array.from({ length: max }, (_, k) => [k + 1, max - k]), alea);
+    const graine = `${etat.graine}:detective:${J}-${i}`;
+    const nom = `${PRENOMS[entier(PRENOMS.length, generateur(`${graine}:nom`))]} ${NOMS[entier(NOMS.length, alea)]}`;
+    liste.push({ id: `d${J}-${i}`, nom, xp: n > 1 ? c.xp[n - 2] : 0, ...profil(cfg, graine), expire: J + 7 });
+  }
+  return liste;
+}
+function retrouver(cfg, etat, o, J, par) {
+  o.lieu = "reserve";
+  delete o.voleeLe;
+  delete o.bonusPolice;
+  o.usure = Math.max(o.usure || 0, cfg.usure.retrouvee);
+  etat.securite.historique.push({ type: "retrouvee", jour: J, oeuvre: o.id, titre: o.titre, par: par?.nom || "police" });
+  evenement(etat, J, "retrouvee", { oeuvre: o.id, titre: o.titre, par: par?.nom || null });
+  for (const d of detectivesDe(etat).carnet) {
+    if (d.mission?.oeuvre !== o.id) continue;
+    delete d.mission;
+  }
+  if (par) {
+    par.xp = (par.xp || 0) + 1;
+    etat.primes = (etat.primes || 0) + prime(cfg, o);
+  }
+}
+function enquetes(cfg, etat, J) {
   const s = cfg.securite;
+  const c = cfg.detectives;
   const faits = [];
-  const chance = chanceEnquete(cfg, etat);
+  const carnet = detectivesDe(etat).carnet;
   for (const o of Object.values(etat.oeuvres)) {
     if (o.lieu !== "volee") continue;
     const alea = generateur(`${etat.graine}:enquete:${o.id}:${J}`);
-    if (alea() < chance) {
-      o.lieu = "reserve";
-      delete o.voleeLe;
-      o.progression = Math.max(0, o.progression - s.degats);
-      if (o.progression < 1) o.restaureeLe = null;
-      etat.securite.historique.push({ type: "retrouvee", jour: J, oeuvre: o.id, titre: o.titre });
-      evenement(etat, J, "retrouvee", { oeuvre: o.id, titre: o.titre });
-      faits.push({ type: "retrouvee", oeuvre: o.id, titre: o.titre });
-    } else if (J - o.voleeLe >= s.enqueteSemaines * 7) {
+    const police = alea() < chancePolice(cfg, etat, o);
+    delete o.bonusPolice;
+    let par = null;
+    if (!police) {
+      for (const d of carnet.filter((x) => x.mission?.oeuvre === o.id).sort((a, b) => a.id.localeCompare(b.id))) {
+        if (alea() < chanceDetective(cfg, d)) {
+          par = d;
+          break;
+        }
+      }
+    }
+    if (police || par) {
+      retrouver(cfg, etat, o, J, par);
+      faits.push({ type: "retrouvee", oeuvre: o.id, titre: o.titre, par: par?.nom || null });
+      continue;
+    }
+    if (J - o.voleeLe >= s.enqueteSemaines * 7) {
       etat.securite.historique.push({ type: "perdue", jour: J, oeuvre: o.id, titre: o.titre, niveau: o.niveau });
+      for (const d of carnet) if (d.mission?.oeuvre === o.id) delete d.mission;
+      etat.pistes = (etat.pistes || []).filter((p) => p.oeuvre !== o.id);
       delete etat.oeuvres[o.id];
       evenement(etat, J, "perdue", { oeuvre: o.id, titre: o.titre });
       faits.push({ type: "perdue", oeuvre: o.id, titre: o.titre });
+      continue;
+    }
+    if (carnet.some((d) => d.mission?.oeuvre === o.id) && alea() < c.piste.probabilite && !(etat.pistes || []).some((p) => p.oeuvre === o.id)) {
+      const villes = c.piste.villes;
+      const piste = {
+        id: `p${o.id}-${J}`,
+        oeuvre: o.id,
+        jour: J,
+        expire: J + c.piste.joursReponse,
+        ville: villes[entier(villes.length, alea)],
+        prix: Math.round(niveau(cfg, o.niveau).prix * (cfg.cote?.[etat.statut] ?? 1) * c.piste.prixPart)
+      };
+      etat.pistes = [...etat.pistes || [], piste];
+      evenement(etat, J, "piste", { oeuvre: o.id, titre: o.titre, ville: piste.ville });
+      faits.push({ type: "piste", oeuvre: o.id, titre: o.titre, ville: piste.ville });
     }
   }
+  for (const d of carnet) if (d.mission && d.mission.fin <= J) delete d.mission;
+  etat.pistes = (etat.pistes || []).filter((p) => p.expire > J && etat.oeuvres[p.oeuvre]?.lieu === "volee");
   return faits;
 }
 
@@ -1339,6 +1626,7 @@ function fermerJour(cfg, etat, d, ctx) {
   for (const o of Object.values(etat.oeuvres)) {
     if (o.lieu === "espace" && ouverts.has(o.espace) || o.lieu === "exposition" && ouverts.has("exposition")) {
       o.joursExpo = (o.joursExpo || 0) + 1;
+      user(cfg, o);
     }
   }
   const sat = satisfaction(cfg, etat, visiteurs);
@@ -1392,6 +1680,7 @@ async function ouvrirJour(cfg, etat, J, ctx) {
   for (const e of etat.evenements) {
     if (e.jour === J && (e.type === "statut" || e.type === "classement" || e.type === "promotion")) rapport.faits.push({ ...e });
   }
+  rapport.faits.push(...finirTravaux(cfg, etat, J, ramener));
   const restants = [];
   for (const p of etat.prets.enCours) {
     if (p.fin > J) {
@@ -1443,6 +1732,10 @@ async function ouvrirJour(cfg, etat, J, ctx) {
       rapport.faits.push({ type: "arrivage", arrivage: a.id, nombre: a.oeuvres.length });
     }
   }
+  if (cfg.detectives && jourSemaine(J) === cfg.arrivages.jourSemaine) {
+    const d2 = detectivesDe(etat);
+    if (!d2.candidats.some((c) => c.id.startsWith(`d${J}-`))) d2.candidats = tirerDetectives(cfg, etat, J);
+  }
   if (etat.personnel) {
     etat.personnel.candidats = etat.personnel.candidats.filter((c) => c.expire > J);
     if (jourSemaine(J) === cfg.arrivages.jourSemaine && !etat.personnel.candidats.some((c) => c.id.startsWith(`c${J}-`))) {
@@ -1451,8 +1744,8 @@ async function ouvrirJour(cfg, etat, J, ctx) {
       rapport.faits.push({ type: "candidats", nombre: nouveaux.length });
     }
   }
-  if (etat.securite && jourSemaine(J) === cfg.securite.jourSemaine) {
-    rapport.faits.push(...enquete(cfg, etat, J));
+  if (etat.securite) {
+    if (jourSemaine(J) === cfg.securite.jourSemaine) rapport.faits.push(...enquetes(cfg, etat, J));
     rapport.faits.push(...tirages(cfg, etat, J));
   }
   const alerte = Math.ceil(cfg.arrivages.alerteExpirationH / 24);

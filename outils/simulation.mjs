@@ -60,7 +60,6 @@ const EQUIPE = {
   maitreChien: () => 1,
   technicien: () => 1,
   chefSecurite: () => 1,
-  enqueteur: () => 1,
   pilote: () => 1,
   // Restaurateurs d'atelier : un par statut, pour les réparations.
   assistant: (st) => st,

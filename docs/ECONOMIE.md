@@ -1,41 +1,51 @@
-# Impôts, personnel et sécurité
+# Gestion du musée : argent, personnel, sécurité, atelier
 
-Ajout du 3 novembre 2026 à la spécification (`SPEC.md`), demandé pour tempérer
-la courbe des gains et donner une gestion au musée. Il remplace, dans la
-section 0, « aucun coût récurrent » : les charges existent, mais elles ne
-tombent qu'en fin de session, sur l'argent des visites. Tous les nombres
-ci-dessous vivent dans `js/config.js` et se règlent dans Réglages.
+Ajout des 3 et 5 novembre 2026 à la spécification (`SPEC.md`), pour tempérer
+la courbe des gains et donner une vraie gestion au musée
+(`PROPOSITION-GESTION.md`). On ne paie et on ne gagne qu'en jouant : toutes
+les charges tombent en fin de session. Seuls les vols, les enquêtes et les
+travaux d'atelier avancent en vrai temps. Tous les nombres ci-dessous vivent
+dans `js/config.js`.
 
-## 1. Fin de session : recettes, charges, impôts
+## 1. Fin de session : le billet en entier, les charges en clair
 
-À la fin d'une session, dans cet ordre :
+Le billet est encaissé en entier ; chaque dépense est retirée en clair, par
+heure de session, figée au lancement comme les recettes :
 
-1. **Recettes** = visiteurs par jour × billet × part du statut × bonus de
-   revenus × heures (formule de la section 10).
-2. **Salaires** = masse salariale horaire × heures. Elle est figée au
-   lancement, comme le taux de recettes.
-3. **Arriérés** : si les recettes ne couvrent pas les salaires, le reste dû
-   passe sur la session suivante. Au-delà de 10 heures de masse salariale en
-   retard, on ne recrute plus.
-4. **Impôt** sur le bénéfice (recettes - salaires - arriérés réglés), barème
-   progressif appliqué au bénéfice horaire :
+| Ligne | Calcul, par heure |
+|---|---|
+| Recettes | visiteurs du jour × prix du billet × bonus de revenus |
+| Accueil | visiteurs du jour × coût d'un visiteur (0,60 ✦ en galerie à 0,76 ✦ au sommet) |
+| Salaires | masse salariale, selon le profil de chacun |
+| Entretien | 5 ✦ par espace public et par aile, × 0,4 à 20 selon le statut |
+| Assurance | 0,12 % de la valeur exposée de chaque salle, majorée selon son risque |
+| Fournitures | 0 à 300 ✦ selon le niveau de l'œuvre restaurée |
+| Primes | primes des détectives qui ont ramené une œuvre, en une fois |
+| Impôt | barème progressif sur ce qui reste (ci-dessous) |
 
-   | Bénéfice par heure | Taux marginal |
-   |---|---|
-   | jusqu'à 100 ✦ | 0 % |
-   | de 100 à 1 000 ✦ | 20 % |
-   | de 1 000 à 4 000 ✦ | 40 % |
-   | au-delà de 4 000 ✦ | 55 % |
+Les indemnités d'assurance (la moitié du prix d'une œuvre volée) s'ajoutent
+aux recettes de la session suivante. Ce que les recettes ne couvrent pas
+devient des arriérés, jamais une dette ; au-delà de 10 heures de salaires et
+d'entretien en retard, on ne recrute plus.
 
-   Les salaires sont déductibles : plus on gagne, moins un employé coûte
-   réellement. Le comptable réduit l'impôt.
-5. **Net** crédité sur la Centrale. La rémunération d'un prêt n'est pas
-   imposée.
+| Bénéfice par heure | Taux marginal |
+|---|---|
+| jusqu'à 100 ✦ | 0 % |
+| de 100 à 1 000 ✦ | 20 % |
+| de 1 000 à 4 000 ✦ | 40 % |
+| au-delà de 4 000 ✦ | 55 % |
 
 Il n'existe pas de fraction d'Éclat. Un taux peut en avoir (un salaire de
 0,5 ✦ par heure), mais chaque montant dû ou versé est arrondi à l'Éclat le
-plus proche : recettes, salaires, arriérés, impôt. Le net est leur
-différence exacte.
+plus proche, et le net est leur différence exacte.
+
+**Le prix du billet** devient un vrai choix : il doit couvrir le coût d'un
+visiteur, et un billet cher attire moins de monde, donc ralentit la montée en
+statut. **Plus cher en grandissant** : la cote du musée relève le prix des
+œuvres (× 1,3 au national, × 1,8 à l'international, × 2,5 à l'universel), et
+salles, ailes, agrandissements et espaces sortent de terre en heures de
+session (4, 10, 2 et 6 h), un chantier à la fois, pendant lesquelles le musée
+perd 10 % de ses visiteurs.
 
 ## 2. Personnel
 
@@ -66,7 +76,7 @@ Les métiers de la sécurité sont décrits à la section 3.
 
 | Métier | Statut | Base | Effet par employé (niveau n) |
 |---|---|---|---|
-| Assistant restaurateur | municipal | 1 | avance une autre œuvre de l'atelier pendant tes sessions : (12 + 3 n) % de ton travail, jusqu'à 30 % de l'œuvre |
+| Assistant restaurateur | municipal | 1 | avance une autre œuvre de l'atelier pendant tes sessions : (12 + 3 n) % de ton travail, jusqu'à 30 % de l'œuvre ; répare et ravive les œuvres à l'atelier (section 4) |
 | Médiateur | galerie | 0,6 | satisfaction + (1,5 + 0,5 n), plafond +15 pour l'ensemble |
 | Agent d'accueil | galerie | 0,5 | seuil d'affluence + (6 + 2 n) % |
 | Chargé de communication | municipal | 1 | campagnes - (10 + 4 n) %, + 1 jour tous les 3 niveaux |
@@ -78,107 +88,104 @@ Les métiers de la sécurité sont décrits à la section 3.
 Pour les métiers « une seule tête » (communication, conservateur, régisseur,
 commissaire, comptable), seul le meilleur compte.
 
-**Salles et gardiens** : une salle ouvre si un gardien la tient. Les gardiens
-vont d'abord aux salles qui ont le plus de prestige accroché ; l'exposition
-temporaire en demande un aussi. Une salle fermée n'attire personne et ses
-œuvres ne vieillissent pas. Le musée démarre avec un gardien.
+**Salles et gardiens** : une salle ouvre si un gardien la couvre. Chaque
+gardien est affecté à une, deux ou trois salles ; l'exposition temporaire en
+demande un aussi. Une salle fermée n'attire personne et ses œuvres ne
+vieillissent pas. Le musée démarre avec un gardien, qui tient la salle 1.
 
 Les anciens investissements « Médiateurs » et « Conservateur » deviennent des
 métiers.
 
-## 3. Sécurité
+## 3. Sécurité, salle par salle
 
-Trois menaces, chacune avec son risque, sa protection et son tirage du
-dimanche à 4 h. Chaque métier et chaque équipement protège contre certaines
-d'entre elles seulement : on ne se couvre pas avec un seul achat.
+Deux menaces, le vol et le vandalisme, tirées chaque jour pour chaque espace
+(salles publiques, exposition temporaire, réserve, atelier), à une heure tirée
+au hasard. La collection privée est à l'abri.
 
-| Menace | Ce qui l'attire | Conséquence |
+- **Risque d'un espace** : le prestige de ses œuvres, pondéré pour le vol par
+  l'emplacement (salle 1, réserve 0,6 ou 0,2 blindée, atelier 0,5), la
+  facilité à emporter (estampes et photographies ×2, sculptures ×0,5) et
+  l'affluence ; pour le vandalisme, la célébrité des œuvres exposées
+  (prestige^1,5 / 10).
+- **Protection d'un espace** : son matériel, le matériel commun (portiques
+  contre le vandalisme, drones contre le vol), et les agents qui le couvrent.
+  Un agent couvre une à trois salles et sa protection s'y partage.
+- **Probabilité par jour** = base × risque / (protection + plancher), bornée.
+  Un vol coûte 3 points de réputation et 1 de confiance ; un vandalisme abîme
+  l'œuvre, qui part en réparation à l'atelier.
+
+| Matériel par salle | Statut | Prix (× places / 6) | Vol | Vandalisme | Autre |
+|---|---|---|---|---|---|
+| Porte blindée | galerie | 300 | 5 | | aussi réserve et atelier |
+| Alarme * | municipal | 1 500 | 15 | | ouvre le technicien |
+| Caméras * | régional | 4 000 | 20 | 15 | moitié sans opérateur vidéo dans la salle |
+| Vitrines sécurisées | national | 8 000 | 40 | 60 | |
+| Blindage | régional | 12 000 | | | réserve seulement : 0,2 au lieu de 0,6 |
+| Sécurité niveau 1 | international | 20 000 | 60 | 30 | Chefs-d'œuvre accrochables dans la salle |
+| Sécurité niveau 2 | universel | 60 000 | 150 | 100 | Trésors accrochables dans la salle |
+
+Matériel commun : portiques (vandalisme 15 partout, ouvrent l'agent de
+sûreté), poste central (ouvre le chef de la sécurité), chenil (ouvre le
+maître-chien), drones * (vol 40 partout, inutiles sans pilote). \* matériel
+électronique, renforcé par le technicien.
+
+| Agent (niveau n) | Vol | Vandalisme |
 |---|---|---|
-| **Cambriolage** (la nuit) | prestige de tout ce que le musée garde, pondéré par l'emplacement : salle 1, privé 0,8, réserve 0,6 (0,2 en salle forte), atelier 0,5 | une œuvre volée, au prorata du prestige ; réputation - 3, confiance - 1 |
-| **Vol en salle** (en journée) | prestige des œuvres exposées, multiplié par l'affluence (0,5 + densité / 100, plafond 3) | une œuvre exposée volée ; estampes et photographies, faciles à glisser sous un manteau, comptent double, les sculptures moitié ; réputation - 2, confiance - 0,5 |
-| **Vandalisme** | la célébrité des œuvres exposées : prestige^1,5 / 10. Négligeable pour une Mineure, écrasant pour un Trésor | l'œuvre est abîmée de 15 à 40 points, décrochée et renvoyée en réserve ; réputation - 2, confiance - 0,5 |
+| Gardien de salle | 4 n | |
+| Veilleur de nuit | 6 n | |
+| Agent de sûreté | 2 n | 8 n |
+| Opérateur vidéo | 8 n | |
+| Maître-chien | 12 n | |
+| Pilote de drone | 25 n | |
 
-**Probabilité** par semaine = base × risque / (protection + plancher),
-bornée. Bases : 3 %, 2 %, 2 % ; planchers : 5, 5, 20.
+Le chef de la sécurité renforce tous les agents de (10 + 3 n) %, le
+technicien le matériel électronique d'autant.
 
-La **confiance** perdue est retirée des bonus permanents : elle abaisse pour
-de bon la réputation vers laquelle le musée tend.
+**Prêteurs** : pour une exposition, un musée ne prête que si la salle la plus
+exposée reste sous son seuil par semaine (5 % pour une Majeure, 3 % pour un
+Chef-d'œuvre, 1,5 % pour un Trésor).
 
-**Œuvres volées** : enquête chaque semaine, 7 % de chances de base, plus
-l'enquêteur et le régisseur. Retrouvée, elle revient abîmée de 20 points.
-Après 26 semaines, elle est perdue.
+**Enquêtes** : un dossier par œuvre volée. La police a 7 % de chances chaque
+dimanche (plus le régisseur). On engage des détectives par mission (2, 4 ou
+8 semaines, payées d'avance à 15 ✦ la semaine × 1,25 par niveau × grille du
+statut × prétention), plusieurs par dossier ; chacun a (5 + 1,5 n) % de
+chances par semaine × son efficacité. Celui qui ramène l'œuvre touche 5 % de
+son prix (réglé avec la session suivante) et prend de l'expérience. Pendant
+une mission, une piste peut apparaître : racheter discrètement (60 % du prix
+coté) ou prévenir la police (+15 points la semaine suivante). Au bout de 26
+semaines, l'œuvre est perdue. Retrouvée, elle revient usée, à réparer.
 
-### Pourquoi investir
+## 4. Atelier, usure et repos
 
-1. Protéger ses œuvres : un Trésor volé, c'est 120 heures de travail en jeu.
-2. Protéger sa réputation, donc ses visiteurs.
-3. **Emprunter.** Pour une exposition temporaire, les musées ne prêtent que
-   si le pire des trois risques reste sous leur seuil : 5 % par semaine pour
-   une Majeure, 3 % pour un Chef-d'œuvre, 1,5 % pour un Trésor.
-4. Exposer ses propres Chefs-d'œuvre et Trésors (sécurité niveaux 1 et 2).
+- **Usure** : une œuvre exposée perd 0,5 % d'état par jour de visite et
+  attire jusqu'à 40 % de moins. À 40 % d'usure, elle est à réparer ; à 80 %,
+  elle ne s'accroche plus.
+- **Réparation et ravivage** : un restaurateur (assistant) prend l'œuvre à
+  l'atelier et la rend intacte en vrai temps, d'un à quelques jours selon son
+  niveau, son usure et la vitesse du restaurateur. Une œuvre intacte peut
+  aussi être ravivée. Au retour, elle retrouve sa place et un attrait de
+  nouveauté de × 1,4.
+- **Capacité** : les emplacements d'atelier (ceux du statut, plus jusqu'à
+  quatre achetés) et les restaurateurs libres. Réparations, ravivages et
+  restaurations se partagent les emplacements.
+- **Collection privée** : à l'abri des vols et du vandalisme ; une œuvre qui y
+  repose 15 jours ressort ravivée.
 
-### Matériel
+## 5. Effet mesuré (`node outils/simulation.mjs`)
 
-| Matériel | Statut | Prix | Cambriolage | Vol en salle | Vandalisme | Ouvre le métier |
-|---|---|---|---|---|---|---|
-| Serrures renforcées | galerie | 300 | 5 | | | |
-| Alarme * | municipal | 2 000 | 20 | | | Technicien de sécurité |
-| Vidéosurveillance * | régional | 8 000 | 30 | 30 | | Opérateur vidéo |
-| Portiques de détection * | régional | 6 000 | | 10 | 30 | Agent de sûreté |
-| Salle forte | régional | 12 000 | réserve 0,2 | | | |
-| Chenil | national | 10 000 | | | | Maître-chien |
-| Vitrines sécurisées | national | 25 000 | | 80 | 120 | |
-| Poste central de sécurité | national | 30 000 | 20 | 20 | | Chef de la sécurité |
-| Sécurité niveau 1 | international | 40 000 | 200 | 100 | 60 | Chefs-d'œuvre exposables |
-| Drones de surveillance * | international | 60 000 | 120 | | | Pilote de drone |
-| Sécurité niveau 2 | universel | 150 000 | 500 | 300 | 300 | Trésors exposables |
+Joueur de référence, à 2 h par jour jusqu'au musée universel : billet à
+1 ✦, un gardien par salle garnie, une équipe de sécurité modeste, porte,
+alarme et caméras dans chaque salle garnie et vitrines dans les deux plus
+précieuses, réparations dès qu'une œuvre s'use.
 
-\* matériel électronique, renforcé par le technicien. Le matériel ne vaut que
-par ceux qui le servent : la vidéosurveillance ne donne que la moitié de sa
-protection sans opérateur vidéo, et des drones sans pilote ne volent pas.
+| Statut | Net par heure |
+|---|---|
+| Municipal | 5 à 12 |
+| Régional | 28 à 74 |
+| National | 214 à 232 |
+| International | 590 à 824 |
+| Universel | 950 à 1 090 |
 
-### Métiers de la sécurité (niveau n)
-
-| Métier | Ouvert par | Base | Cambriolage | Vol en salle | Vandalisme | Autre |
-|---|---|---|---|---|---|---|
-| Gardien de salle | galerie | 0,5 | n | 3 n | | ouvre une salle |
-| Veilleur de nuit | municipal | 0,5 | 6 n | | | |
-| Agent de sûreté | portiques | 0,5 | | 2 n | 8 n | fouille à l'entrée |
-| Opérateur vidéo | vidéosurveillance | 0,6 | 4 n | 4 n | | rend la vidéo pleinement efficace |
-| Maître-chien | chenil | 0,7 | 12 n | | | |
-| Technicien de sécurité | alarme | 0,8 | | | | matériel électronique + (10 + 3 n) % ; un seul compte |
-| Chef de la sécurité | poste central | 1,2 | | | | toute la protection humaine + (10 + 3 n) % ; un seul compte |
-| Enquêteur | national | 1 | | | | œuvres volées retrouvées + (3 + 1,5 n) points par semaine ; un seul compte |
-| Pilote de drone | drones | 1 | 25 n | | | |
-
-Les drones et le chenil ne protègent que grâce aux pilotes et aux
-maîtres-chiens qui les accompagnent. Un matériel qui ouvre un métier amène
-aussitôt un premier candidat de ce métier, sans attendre le lundi.
-
-## 4. Effet mesuré (`node outils/simulation.mjs`)
-
-Joueur de référence (section 20 de la spec) : un gardien par salle garnie, une
-équipe de sécurité modeste (un veilleur par statut, un exemplaire de chaque
-métier spécialisé dès que son matériel est là), tout le matériel dès qu'il
-s'ouvre, aucun autre employé.
-
-| Statut | Brut par heure | Net par heure |
-|---|---|---|
-| Municipal | 11 à 13 | 9 à 11 |
-| Régional | 68 à 91 | 56 à 79 |
-| National | 722 à 760 | 522 à 552 |
-| International | 3 060 à 3 130 | 1 790 à 1 840 |
-| Universel | 8 780 à 9 000 | 4 360 à 4 440 |
-
-La sécurité doit se payer d'elle-même : à 2 h par jour sur 1 000 jours, avec la
-réputation que calcule le jeu (`--horizon 1000 --reputation libre`) :
-
-| | Avec l'équipe | Sans équipe (matériel seul) |
-|---|---|---|
-| Recettes | 6,14 M | 4,86 M |
-| Salaires | 0,80 M | 0,18 M |
-| Net | 3,49 M | 3,18 M |
-| Vols et vandalismes | 13 | 27 |
-| Œuvres perdues pour de bon | 0 | 6 |
-
-Les délais d'accès aux statuts restent dans les repères de la spec.
+Sur toute la partie : environ 1,2 M d'Éclats nets (3 M avant cette
+refonte), dont 55 à 70 % réinvestis dans le musée. Les délais d'accès aux
+statuts restent à moins de 15 % des repères de la spec.

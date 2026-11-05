@@ -302,7 +302,7 @@ function verifierBilan() {
     maitriseApres: maitrise,
     finances: s.recettes === undefined ? null : {
       recettes: s.recettes, indemnites: s.indemnites || 0, salaires: s.salaires, accueil: s.accueil || 0, entretien: s.entretien || 0,
-      assurance: s.assurance || 0, fournitures: s.fournitures || 0, arrieresPayes: 0, arrieresRestants: s.arrieres || 0, impot: s.impot, net: s.eclats,
+      assurance: s.assurance || 0, fournitures: s.fournitures || 0, primes: s.primes || 0, arrieresPayes: 0, arrieresRestants: s.arrieres || 0, impot: s.impot, net: s.eclats,
     },
   });
 }

@@ -24,6 +24,7 @@ import {
 import { bonusReputation } from './journee.js';
 import { entrerDansLePublic, sortirDuPublic } from './lieux.js';
 import { chargesHoraires, ouvrirChantier, avancerChantiers } from './charges.js';
+import { detectivesDe, forfait, racheter } from './detectives.js';
 import { meilleurRestaurateur, restaurateursLibres, typeTravaux, joursTravaux } from './atelier.js';
 
 export class ErreurJeu extends Error {
@@ -401,6 +402,56 @@ export function affecter(cfg, etat0, { employe, lieux }) {
   return { etat };
 }
 
+/* ---------- Détectives ---------- */
+
+/**
+ * Engage un détective sur le dossier d'une œuvre volée, pour quelques
+ * semaines payées d'avance. Plusieurs peuvent travailler sur le même dossier.
+ */
+export function engagerDetective(cfg, etat0, { oeuvre, detective, semaines }, jour) {
+  const etat = copie(etat0);
+  const o = oeuvreDe(etat, oeuvre);
+  if (o.lieu !== 'volee') refuser('Cette œuvre n\'est pas volée');
+  if (!cfg.detectives.durees.includes(semaines)) refuser('Durée de mission inconnue');
+  const d = detectivesDe(etat);
+  let x = d.carnet.find((y) => y.id === detective);
+  if (x?.mission) refuser(`${x.nom} est déjà en mission`);
+  if (!x) {
+    const c = d.candidats.find((y) => y.id === detective && y.expire > jour);
+    if (!c) refuser('Détective indisponible');
+    d.candidats = d.candidats.filter((y) => y.id !== detective);
+    const { expire, ...reste } = c;
+    x = reste;
+    d.carnet.push(x);
+  }
+  const montant = forfait(cfg, etat, x, semaines);
+  x.mission = { oeuvre: o.id, debut: jour, fin: jour + semaines * 7 };
+  return {
+    etat,
+    depense: { montant, cle: `musee:detective:${x.id}:${o.id}:${jour}`, motif: `Enquête : ${x.nom}`, type: 'enquete', meta: { oeuvre: o.id, detective: x.id, semaines } },
+  };
+}
+
+/** Rachète discrètement une œuvre signalée par une piste : sûr, mais cher. */
+export function racheterPiste(cfg, etat0, { piste }, jour) {
+  const etat = copie(etat0);
+  const p = (etat.pistes || []).find((x) => x.id === piste);
+  if (!p || p.expire <= jour) refuser('Piste refroidie');
+  racheter(cfg, etat, p, jour);
+  return { etat, depense: { montant: p.prix, cle: `musee:piste:${p.id}`, motif: 'Rachat discret', type: 'enquete', meta: { oeuvre: p.oeuvre } } };
+}
+
+/** Transmet une piste à la police : gratuit, et sa chance monte d'un cran la semaine suivante. */
+export function prevenirPolice(cfg, etat0, { piste }) {
+  const etat = copie(etat0);
+  const p = (etat.pistes || []).find((x) => x.id === piste);
+  if (!p) refuser('Piste refroidie');
+  const o = etat.oeuvres[p.oeuvre];
+  if (o) o.bonusPolice = (o.bonusPolice || 0) + cfg.detectives.piste.bonusPolice;
+  etat.pistes = etat.pistes.filter((x) => x.id !== piste);
+  return { etat };
+}
+
 /* ---------- Communication ---------- */
 
 export function etatCampagne(cfg, etat, jour) {
@@ -616,7 +667,7 @@ export function demarrerSession(cfg, etat0, { id, oeuvre, dureeMin, debut }, jou
  * compté est borné à la durée prévue ; sous le seuil, rien ne compte.
  * `arrieres` : salaires restés dus des sessions précédentes.
  */
-export function resultatSession(cfg, session, finMs, { arrieres = 0, indemnites = 0 } = {}) {
+export function resultatSession(cfg, session, finMs, { arrieres = 0, indemnites = 0, primes = 0 } = {}) {
   const prevueMs = session.dureeMin * 60e3;
   const ecouleMs = Math.max(0, Math.min(prevueMs, finMs - session.debut));
   let minutes = Math.floor(ecouleMs / 60e3);
@@ -642,6 +693,7 @@ export function resultatSession(cfg, session, finMs, { arrieres = 0, indemnites 
     minutes,
     arrieres: minutes ? arrieres : 0,
     indemnites,
+    primes,
     abattement: f.abattement || 0,
   });
   return {
@@ -664,7 +716,7 @@ export function terminerSession(cfg, etat0, finMs, jour) {
   const etat = copie(etat0);
   const s = etat.session;
   if (!s) refuser('Aucune session en cours');
-  const r = resultatSession(cfg, s, finMs, { arrieres: etat.personnel?.arrieres || 0, indemnites: etat.indemnites || 0 });
+  const r = resultatSession(cfg, s, finMs, { arrieres: etat.personnel?.arrieres || 0, indemnites: etat.indemnites || 0, primes: etat.primes || 0 });
   const o = etat.oeuvres[s.oeuvre];
   if (o) {
     o.progression = r.progressionApres;
@@ -696,6 +748,7 @@ export function terminerSession(cfg, etat0, finMs, jour) {
   // ses heures font avancer les chantiers.
   if (r.minutes) {
     etat.indemnites = 0;
+    etat.primes = 0;
     avancerChantiers(cfg, etat, r.minutes, jour);
   }
 
@@ -711,6 +764,7 @@ export function terminerSession(cfg, etat0, finMs, jour) {
     entretien: r.finances.entretien || 0,
     assurance: r.finances.assurance || 0,
     fournitures: r.finances.fournitures || 0,
+    primes: r.finances.primes || 0,
     impot: r.finances.impot,
     arrieres: r.finances.arrieresRestants,
     assistants: r.assistants.map((a) => ({ nom: a.nom, oeuvre: a.oeuvre, avant: a.avant, apres: a.apres })),

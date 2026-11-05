@@ -9,8 +9,9 @@ import {
   salaireHoraire, niveauEmploye, tirerCandidats, effetsPersonnel, masseSalariale, fraisRecrutement, personne,
 } from '../js/moteur/personnel.js';
 import { espacesOuverts, visiteursDuJour } from '../js/moteur/visiteurs.js';
-import { risques, protections, probabilites, tirages, enquete, peutEmprunter } from '../js/moteur/securite.js';
-import { installer, affecter } from '../js/moteur/actions.js';
+import { risques, protections, probabilites, tirages, peutEmprunter } from '../js/moteur/securite.js';
+import { installer, affecter, engagerDetective, racheterPiste } from '../js/moteur/actions.js';
+import { enquetes as enquete, tirerDetectives, chanceDetective, niveauDetective } from '../js/moteur/detectives.js';
 import {
   deplacer, demarrerSession, terminerSession, embaucher, licencier, investir, lancerCampagne, coutCampagne, ouvrirExposition,
   confierAtelier,
@@ -426,4 +427,47 @@ test("collection privée : à l'abri des cambrioleurs, et un repos qui ravive", 
   assert.equal(Object.values(risques(cfg, e, 20000)).reduce((t, x) => t + x.vol, 0), 0);
   e = deplacer(cfg, e, { oeuvre: 1, vers: { lieu: 'espace', espace: 's1', place: 0 } }, 20000 + cfg.atelier.reposPriveeJours).etat;
   assert.ok(e.oeuvres[1].joursExpo < 300);
+});
+
+/* ---------- Détectives ---------- */
+
+test("détectives : mission payée d'avance, plusieurs par dossier, prime à celui qui ramène l'œuvre", () => {
+  const e = musee([{ id: 1, niveau: 4, lieu: 'volee', voleeLe: 20000 }]);
+  e.statut = 3;
+  e.detectives = { carnet: [], candidats: tirerDetectives(cfg, e, 20000) };
+  const [a, b] = e.detectives.candidats;
+  assert.notEqual(a.efficacite, undefined, 'chacun a son profil');
+  let r = engagerDetective(cfg, e, { oeuvre: 1, detective: a.id, semaines: 4 }, 20000);
+  assert.ok(r.depense.montant > 0);
+  r = engagerDetective(cfg, r.etat, { oeuvre: 1, detective: b.id, semaines: 2 }, 20000);
+  assert.throws(() => engagerDetective(cfg, r.etat, { oeuvre: 1, detective: a.id, semaines: 2 }, 20000), /déjà en mission/);
+  const etat = r.etat;
+  // Sans police, un détective infaillible la retrouve : lui seul est payé.
+  const sur = configEffective({ securite: { enquete: 0 }, detectives: { chanceBase: 1 } });
+  enquete(sur, etat, 20007);
+  assert.equal(etat.oeuvres[1].lieu, 'reserve');
+  assert.equal(etat.oeuvres[1].usure, cfg.usure.retrouvee);
+  assert.equal(etat.primes, Math.round(cfg.niveaux[4].prix * 0.05));
+  const gagnant = etat.detectives.carnet.find((d) => d.xp > 0);
+  assert.ok(gagnant, "le gagnant prend de l'expérience");
+  assert.equal(etat.detectives.carnet.filter((d) => d.mission).length, 0, 'les missions du dossier prennent fin');
+  assert.ok(niveauDetective(cfg, { xp: 3 }) > niveauDetective(cfg, { xp: 0 }));
+  assert.ok(chanceDetective(cfg, { xp: 10, efficacite: 1 }) > chanceDetective(cfg, { xp: 0, efficacite: 1 }));
+});
+
+test("pistes : un rachat discret ramène l'œuvre aussitôt, contre son prix", () => {
+  const e = musee([{ id: 1, niveau: 3, lieu: 'volee', voleeLe: 20000 }]);
+  e.pistes = [{ id: 'p1', oeuvre: 1, jour: 20000, expire: 20003, ville: 'Genève', prix: 999 }];
+  const r = racheterPiste(cfg, e, { piste: 'p1' }, 20001);
+  assert.equal(r.depense.montant, 999);
+  assert.equal(r.etat.oeuvres[1].lieu, 'reserve');
+  assert.equal(r.etat.primes || 0, 0, "aucune prime : personne ne l'a retrouvée");
+  assert.throws(() => racheterPiste(cfg, e, { piste: 'p1' }, 20004), /refroidie/);
+});
+
+test('prime : réglée avec la session suivante, comme une charge', () => {
+  const b = bilanFinancier(cfg, { tauxHoraire: 100, salaireHoraire: 0, minutes: 60, primes: 30 });
+  assert.equal(b.primes, 30);
+  assert.equal(b.net, 70);
+  assert.equal(bilanFinancier(cfg, { tauxHoraire: 100, salaireHoraire: 0, minutes: 0, primes: 30 }).primes, 0);
 });

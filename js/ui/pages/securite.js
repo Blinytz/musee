@@ -2,11 +2,12 @@
 // son matériel et ses agents, le matériel commun, les prêteurs, les œuvres
 // volées. Menaces, salles et matériel ouvrent leur fiche détaillée.
 
-import { h, icone, nombre, dateJour, ajouter, pourcent } from '../dom.js';
+import { h, icone, nombre, dateJour, ajouter } from '../dom.js';
 import {
-  MENACES, probabilites, risqueMaximal, chanceEnquete, seuilEmprunt, risqueMusee, lieuxSecurises, materielDe, affectation,
+  MENACES, probabilites, risqueMaximal, seuilEmprunt, risqueMusee, lieuxSecurises, materielDe, affectation,
 } from '../../moteur/securite.js';
-import { ficheMenace, ficheMateriel, ficheSalle, niveauRisque, resumeMateriel, risqueSalle } from '../fiches.js';
+import { ficheMenace, ficheMateriel, ficheSalle, ficheDossier, niveauRisque, resumeMateriel, risqueSalle } from '../fiches.js';
+import { portrait } from '../composants.js';
 import { catalogueInvestissements } from '../../moteur/actions.js';
 import { employes, role } from '../../moteur/personnel.js';
 
@@ -92,25 +93,33 @@ export async function afficher(app, vue) {
       return n ? h('div.ligne.espace.tres-discret', h('span', x.pluriel), h('span', n)) : null;
     })));
 
-  // Œuvres volées : l'enquête continue chaque semaine.
+  // Œuvres volées : un dossier chacune, la police et les détectives engagés.
   const volees = Object.values(e.oeuvres).filter((o) => o.lieu === 'volee');
   if (volees.length) {
-    const chance = chanceEnquete(cfg, e);
-    ajouter(vue, h('div.section', h('h2', 'Œuvres volées')),
-      h('div.pile', volees.map((o) => {
+    const carnet = e.detectives?.carnet || [];
+    ajouter(vue, h('div.section', h('h2', 'Enquêtes')),
+      h('div.entrees', volees.map((o) => {
         const restant = cfg.securite.enqueteSemaines - Math.floor((jour - o.voleeLe) / 7);
-        return h('a.carte.ligne.espace', { href: `#/oeuvre/${o.id}`, style: { textDecoration: 'none', color: 'inherit' } },
-          h('div', h('b', o.titre), h('div.tres-discret', `Volée le ${dateJour(o.voleeLe)}`)),
-          h('div', { style: { textAlign: 'right' } }, h('div', `${pourcent(chance)} par semaine`), h('div.tres-discret', `${restant} semaines`)));
+        const sur = carnet.filter((d) => d.mission?.oeuvre === o.id);
+        const piste = (e.pistes || []).find((x) => x.oeuvre === o.id && x.expire > jour);
+        return h('button.entree', { type: 'button', onclick: () => ficheDossier(app, o.id) },
+          h('span', h('b', o.titre), h('small', { classe: piste ? 'alerte' : '' }, [
+            piste ? `Piste à ${piste.ville}` : null,
+            sur.length ? `${sur.length} détective${sur.length > 1 ? 's' : ''}` : 'Police seule',
+            `${restant} semaines`,
+          ].filter(Boolean).join(' · '))),
+          sur.length ? h('span.equipe-portraits', sur.slice(0, 3).map((d) => portrait(d.nom))) : null,
+          icone('droite'));
       })));
   }
 
   const histo = [...(e.securite?.historique || [])].reverse().slice(0, 12);
   if (histo.length) {
     const libelle = { vol: 'Vol', volSalle: 'Vol en salle', vandalisme: 'Vandalisme', retrouvee: 'Retrouvée', perdue: 'Perdue' };
+    const par = (x) => (x.type === 'retrouvee' && x.par ? `par ${x.par}` : null);
     const lieux = new Map(lieuxSecurises(cfg, e).map((l) => [l.id, l.nom]));
     ajouter(vue, h('div.section', h('h2', 'Historique')),
       h('div.pile', { style: { gap: '4px' } }, histo.map((x) => h('div.ligne.espace',
-        h('span', x.titre), h('span.tres-discret', [libelle[x.type] || x.type, lieux.get(x.lieu), dateJour(x.jour), x.heure !== undefined ? `${x.heure} h` : null].filter(Boolean).join(' · '))))));
+        h('span', x.titre), h('span.tres-discret', [libelle[x.type] || x.type, par(x), lieux.get(x.lieu), dateJour(x.jour), x.heure !== undefined ? `${x.heure} h` : null].filter(Boolean).join(' · '))))));
   }
 }

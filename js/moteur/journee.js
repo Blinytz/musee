@@ -11,7 +11,8 @@ import {
   detailVisiteurs, satisfaction, reputationSuivante, espacesOuverts,
 } from './visiteurs.js';
 import { tirerCandidats, effetsPersonnel } from './personnel.js';
-import { tirages, enquete } from './securite.js';
+import { tirages } from './securite.js';
+import { enquetes, tirerDetectives, detectivesDe } from './detectives.js';
 import { espace, contenuEspace, refusAccrochage } from './batiment.js';
 import { positionJoueur, tableau } from './classement.js';
 import { tirerArrivage, debloque } from './arrivages.js';
@@ -188,6 +189,11 @@ export async function ouvrirJour(cfg, etat, J, ctx) {
       rapport.faits.push({ type: 'arrivage', arrivage: a.id, nombre: a.oeuvres.length });
     }
   }
+  // Détectives disponibles cette semaine, avec l'arrivage.
+  if (cfg.detectives && jourSemaine(J) === cfg.arrivages.jourSemaine) {
+    const d = detectivesDe(etat);
+    if (!d.candidats.some((c) => c.id.startsWith(`d${J}-`))) d.candidats = tirerDetectives(cfg, etat, J);
+  }
   // Candidats de la semaine, en même temps que l'arrivage.
   if (etat.personnel) {
     etat.personnel.candidats = etat.personnel.candidats.filter((c) => c.expire > J);
@@ -201,7 +207,7 @@ export async function ouvrirJour(cfg, etat, J, ctx) {
   // Sécurité : l'enquête de la police chaque dimanche, et chaque jour les
   // tirages de vol et de vandalisme, salle par salle.
   if (etat.securite) {
-    if (jourSemaine(J) === cfg.securite.jourSemaine) rapport.faits.push(...enquete(cfg, etat, J));
+    if (jourSemaine(J) === cfg.securite.jourSemaine) rapport.faits.push(...enquetes(cfg, etat, J));
     rapport.faits.push(...tirages(cfg, etat, J));
   }
 

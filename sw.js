@@ -12,7 +12,7 @@
  */
 
 const PREFIXE = 'musee-';
-const CACHE = `${PREFIXE}v6-portraits`;
+const CACHE = `${PREFIXE}v7-gestion`;
 const CACHE_CATALOGUE = `${PREFIXE}catalogue`;
 
 const FICHIERS = [
@@ -41,6 +41,7 @@ const FICHIERS = [
   './js/moteur/batiment.js',
   './js/moteur/charges.js',
   './js/moteur/classement.js',
+  './js/moteur/detectives.js',
   './js/moteur/etat.js',
   './js/moteur/journee.js',
   './js/moteur/lieux.js',

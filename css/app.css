@@ -458,6 +458,11 @@ input[type=range] { accent-color: var(--accent); }
 .materiel-ligne > div { flex: 1; min-width: 0; }
 .materiel-ligne small { display: block; color: var(--texte-2); font-size: 12px; }
 .fiche-legende + .materiel-ligne { border-top: 0; }
+.detective { display: grid; gap: 8px; padding: 10px 0; border-top: 1px solid var(--trait); }
+.detective .portrait { width: 44px; height: 44px; }
+.detective b { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.durees { display: flex; flex-wrap: wrap; gap: 6px; }
+.entree .equipe-portraits .portrait { width: 30px; height: 30px; }
 .menace {
   display: grid; gap: 6px; align-content: start; text-align: left; padding: 12px; color: inherit;
   background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); font: inherit; cursor: pointer;

@@ -271,32 +271,6 @@ export function tirages(cfg, etat, J) {
   return faits;
 }
 
-/** Enquête hebdomadaire : retrouvée (abîmée), toujours cherchée, ou perdue. */
-export function enquete(cfg, etat, J) {
-  const s = cfg.securite;
-  const faits = [];
-  const chance = chanceEnquete(cfg, etat);
-  for (const o of Object.values(etat.oeuvres)) {
-    if (o.lieu !== 'volee') continue;
-    const alea = generateur(`${etat.graine}:enquete:${o.id}:${J}`);
-    if (alea() < chance) {
-      o.lieu = 'reserve';
-      delete o.voleeLe;
-      // Elle revient abîmée : réparation à l'atelier.
-      o.usure = Math.max(o.usure || 0, cfg.usure.retrouvee);
-      etat.securite.historique.push({ type: 'retrouvee', jour: J, oeuvre: o.id, titre: o.titre });
-      evenement(etat, J, 'retrouvee', { oeuvre: o.id, titre: o.titre });
-      faits.push({ type: 'retrouvee', oeuvre: o.id, titre: o.titre });
-    } else if (J - o.voleeLe >= s.enqueteSemaines * 7) {
-      etat.securite.historique.push({ type: 'perdue', jour: J, oeuvre: o.id, titre: o.titre, niveau: o.niveau });
-      delete etat.oeuvres[o.id];
-      evenement(etat, J, 'perdue', { oeuvre: o.id, titre: o.titre });
-      faits.push({ type: 'perdue', oeuvre: o.id, titre: o.titre });
-    }
-  }
-  return faits;
-}
-
 /* ---------- Affectation par défaut ---------- */
 
 /** Valeur exposée d'un espace : où un agent sert le plus. */

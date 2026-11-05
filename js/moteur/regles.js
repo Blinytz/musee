@@ -102,18 +102,20 @@ export const CHARGES = ['accueil', 'entretien', 'assurance', 'fournitures'];
  * recettes ne couvrent pas devient des arriérés, jamais une dette.
  */
 export function bilanFinancier(cfg, {
-  tauxHoraire, salaireHoraire, charges = {}, minutes, arrieres = 0, abattement = 0, indemnites = 0,
+  tauxHoraire, salaireHoraire, charges = {}, minutes, arrieres = 0, abattement = 0, indemnites = 0, primes = 0,
 }) {
   const heures = minutes / 60;
   const recettes = Math.round(recettesSession(tauxHoraire, minutes));
   const salaires = Math.round(Math.max(0, salaireHoraire) * heures);
   const lignes = Object.fromEntries(CHARGES.map((k) => [k, Math.round(Math.max(0, charges[k] || 0) * heures)]));
-  const courant = salaires + CHARGES.reduce((t, k) => t + lignes[k], 0);
+  // Les primes des détectives se règlent avec la session, en une fois.
+  const primesDues = minutes ? Math.round(primes) : 0;
+  const courant = salaires + CHARGES.reduce((t, k) => t + lignes[k], 0) + primesDues;
   // Un état ancien peut garder des arriérés fractionnaires.
   const anciens = Math.round(arrieres);
   const credits = recettes + (minutes ? Math.round(indemnites) : 0);
   const du = courant + anciens;
-  const base = { recettes, indemnites: credits - recettes, salaires, ...lignes };
+  const base = { recettes, indemnites: credits - recettes, salaires, ...lignes, primes: primesDues };
   if (credits < du) {
     return { ...base, arrieresPayes: Math.max(0, credits - courant), arrieresRestants: du - credits, benefice: 0, impot: 0, net: 0 };
   }

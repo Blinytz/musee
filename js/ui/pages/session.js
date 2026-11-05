@@ -152,6 +152,7 @@ export function lignesFinances(f) {
     moins('Entretien', f.entretien || 0),
     moins('Assurance', f.assurance || 0),
     moins('Fournitures', f.fournitures || 0),
+    moins('Primes des détectives', f.primes || 0),
     moins('Impôts', f.impot),
     f.arrieresRestants > 0.5 ? ligne('Arriérés', `${n(f.arrieresRestants)} ✦`, { color: 'var(--rouge)' }) : null,
     h('div.ligne.espace', h('b', 'Net'), h('span.eclats', n(f.net))),
