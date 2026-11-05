@@ -12,15 +12,19 @@ export function role(cfg, id) {
 
 /** Métiers ouverts : le statut suffit, sauf pour ceux qui exigent un matériel. */
 export function rolesOuverts(cfg, etat) {
-  return cfg.personnel.roles.filter((r) => r.statutMin <= etat.statut
-    && (!r.equipement || (etat.investissements || []).includes(r.equipement)));
+  return cfg.personnel.roles.filter((r) => r.statutMin <= etat.statut && (!r.equipement || equipementPresent(etat, r.equipement)));
+}
+
+/** Un matériel est là : acheté pour tout le musée, ou installé dans au moins une salle. */
+export function equipementPresent(etat, id) {
+  return (etat.investissements || []).includes(id) || Object.values(etat.securite?.salles || {}).some((l) => l.includes(id));
 }
 
 /** Ce qui manque pour ouvrir un métier, ou null. */
 export function refusRole(cfg, etat, r) {
   if (r.statutMin > etat.statut) return cfg.statuts[r.statutMin].nom;
-  if (r.equipement && !(etat.investissements || []).includes(r.equipement)) {
-    return cfg.investissements.find((i) => i.id === r.equipement)?.nom || r.equipement;
+  if (r.equipement && !equipementPresent(etat, r.equipement)) {
+    return cfg.investissements.find((i) => i.id === r.equipement)?.nom || cfg.materielSalle?.find((m) => m.id === r.equipement)?.nom || r.equipement;
   }
   return null;
 }

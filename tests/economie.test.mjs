@@ -10,6 +10,7 @@ import {
 } from '../js/moteur/personnel.js';
 import { espacesOuverts, visiteursDuJour } from '../js/moteur/visiteurs.js';
 import { risques, protections, probabilites, tirages, enquete, peutEmprunter } from '../js/moteur/securite.js';
+import { installer, affecter } from '../js/moteur/actions.js';
 import {
   deplacer, demarrerSession, terminerSession, embaucher, licencier, investir, lancerCampagne, coutCampagne, ouvrirExposition,
   confierAtelier,
@@ -137,13 +138,13 @@ test('profils : deux candidats de même niveau ne se valent pas, en moyenne rien
 
 test("profils : l'efficacité règle l'apport, la prétention règle le salaire", () => {
   const e = musee();
-  e.personnel.employes = [{ id: 'a', nom: 'a', role: 'veilleur', minutes: 0, efficacite: 1.2, salaire: 0.9 }];
+  e.personnel.employes = [{ id: 'a', nom: 'a', role: 'veilleur', minutes: 0, efficacite: 1.2, salaire: 0.9, affectation: ['s1'] }];
   e.statut = 1;
-  assert.ok(Math.abs(effetsPersonnel(cfg, e).menaces.nuit - 6 * 1.2) < 1e-9);
+  assert.ok(Math.abs(protections(cfg, e).s1.vol - 6 * 1.2) < 1e-9);
   assert.ok(Math.abs(salaireHoraire(cfg, e, { role: 'veilleur', niveau: 1, salaire: 0.9 }) - 0.5 * 2 * 0.9) < 1e-9);
   // Un employé d'avant les profils garde exactement ses chiffres.
-  e.personnel.employes = [{ id: 'b', nom: 'b', role: 'veilleur', minutes: 0 }];
-  assert.equal(effetsPersonnel(cfg, e).menaces.nuit, 6);
+  e.personnel.employes = [{ id: 'b', nom: 'b', role: 'veilleur', minutes: 0, affectation: ['s1'] }];
+  assert.equal(protections(cfg, e).s1.vol, 6);
 });
 
 test('embauche : frais de recrutement, refus avec des arriérés ; licenciement libre', () => {
@@ -195,67 +196,83 @@ test('communication : campagnes moins chères et plus longues', () => {
 
 /* ---------- Sécurité ---------- */
 
-function employe(e, role, minutes = 0) {
-  e.personnel.employes.push({ id: `${role}${e.personnel.employes.length}`, nom: role, role, minutes });
+function employe(e, role, minutes = 0, affectation = ['s1']) {
+  e.personnel.employes.push({ id: `${role}${e.personnel.employes.length}`, nom: role, role, minutes, affectation });
 }
 
-test('trois menaces : risque pondéré par l\'emplacement, protection par métier et matériel', () => {
-  let e = musee([{ id: 1, niveau: 2 }, { id: 2, niveau: 2, lieu: 'reserve' }]);
+test('salle par salle : le risque vient des œuvres de la salle, la protection de ce qui y est', () => {
+  let e = musee([{ id: 1, niveau: 2 }, { id: 2, niveau: 2, lieu: 'reserve' }, { id: 3, niveau: 2, lieu: 'privee' }]);
   e = accrocher(e, 1, 's1', 0);
   const r = risques(cfg, e, 20000);
-  assert.equal(r.nuit, 8 + 8 * 0.6);
-  assert.ok(r.jour > 0);
-  assert.ok(Math.abs(r.vandalisme - 8 ** 1.5 / 10) < 1e-9);
-  // Le gardien de départ, niveau 1 : cambriolage 1, vol en salle 3.
-  assert.deepEqual(protections(cfg, e), { nuit: 1, jour: 3, vandalisme: 0 });
-  e = investir(cfg, e, { quoi: 'inv:serrures' }).etat;
-  assert.equal(protections(cfg, e).nuit, 6);
-  assert.ok(Math.abs(probabilites(cfg, e, 20000).nuit - 0.03 * 12.8 / (6 + 5)) < 1e-12);
+  assert.ok(r.s1.vol > 0 && r.s1.vandalisme > 0);
+  assert.equal(r.s2.vol, 0);
+  assert.equal(r.reserve.vol, 8 * 0.6);
+  assert.equal(r.reserve.vandalisme, 0);
+  assert.ok(!('privee' in r), 'la collection privée est à l\'abri');
+  // Le gardien de départ tient la salle 1 : vol +4.
+  assert.equal(protections(cfg, e).s1.vol, 4);
+  assert.equal(protections(cfg, e).s2.vol, 0);
+  e = installer(cfg, e, { lieu: 's1', materiel: 'porte' }).etat;
+  assert.equal(protections(cfg, e).s1.vol, 9);
+  assert.equal(protections(cfg, e).s2.vol, 0);
+  const c = cfg.securite.menaces.vol;
+  assert.ok(Math.abs(probabilites(cfg, e, 20000).s1.vol - Math.max(c.min, c.base * r.s1.vol / (9 + c.plancher))) < 1e-12);
+});
+
+test('un agent couvre une à trois salles, et sa protection s\'y partage', () => {
+  const e = musee();
+  e.statut = 1;
+  employe(e, 'veilleur', 0, ['s1']);
+  assert.equal(protections(cfg, e).s1.vol, 4 + 6);
+  e.personnel.employes.at(-1).affectation = ['s1', 's2'];
+  assert.equal(protections(cfg, e).s1.vol, 4 + 3);
+  assert.equal(protections(cfg, e).s2.vol, 3);
+  assert.throws(() => affecter(cfg, e, { employe: e.personnel.employes.at(-1).id, lieux: ['s1', 's2', 'reserve', 'atelier'] }), /3 salles/);
 });
 
 test('le matériel ne vaut que par ceux qui le servent', () => {
   const e = musee();
   e.statut = 4;
-  e.investissements = ['alarme', 'video', 'drones'];
-  const seul = protections(cfg, e).nuit;
-  // Vidéo à moitié sans opérateur, drones au sol sans pilote.
-  assert.equal(seul, 1 + 20 + 15);
-  employe(e, 'operateur');
-  employe(e, 'pilote');
-  assert.equal(protections(cfg, e).nuit, 1 + 20 + 30 + 120 + 4 + 25);
-  employe(e, 'technicien');
-  const technicien = protections(cfg, e).nuit;
-  assert.ok(Math.abs(technicien - (1 + 4 + 25 + (20 + 30 + 120) * 1.13)) < 1e-9);
+  e.securite.salles = { s1: ['alarme', 'cameras'] };
+  e.investissements = ['drones'];
+  // Caméras à moitié sans opérateur dans la salle, drones au sol sans pilote.
+  assert.equal(protections(cfg, e).s1.vol, 4 + 15 + 10);
+  employe(e, 'operateur', 0, ['s1']);
+  employe(e, 'pilote', 0, ['s2']);
+  assert.equal(protections(cfg, e).s1.vol, 4 + 15 + 20 + 40 + 8);
+  employe(e, 'technicien', 0, []);
+  assert.ok(Math.abs(protections(cfg, e).s1.vol - (4 + 8 + (15 + 20 + 40) * 1.13)) < 1e-9);
 });
 
 test('le chef de la sécurité renforce toute la protection humaine', () => {
   const e = musee();
   e.statut = 3;
-  employe(e, 'veilleur');
-  const avant = protections(cfg, e).nuit;
-  employe(e, 'chefSecurite');
-  assert.ok(Math.abs(protections(cfg, e).nuit - avant * 1.13) < 1e-9);
+  employe(e, 'veilleur', 0, ['s1']);
+  const avant = protections(cfg, e).s1.vol;
+  employe(e, 'chefSecurite', 0, []);
+  assert.ok(Math.abs(protections(cfg, e).s1.vol - avant * 1.13) < 1e-9);
 });
 
-test('certains métiers ne s\'ouvrent qu\'avec leur matériel', () => {
+test('certains métiers ne s\'ouvrent qu\'avec leur matériel, commun ou installé', () => {
   const e = musee();
   e.statut = 4;
   const ids = () => rolesOuverts(cfg, e).map((r) => r.id);
   assert.ok(!ids().includes('pilote'));
   assert.ok(!ids().includes('operateur'));
-  e.investissements = ['video', 'drones'];
+  e.investissements = ['drones'];
+  e.securite.salles = { s2: ['cameras'] };
   assert.ok(ids().includes('pilote'));
   assert.ok(ids().includes('operateur'));
 });
 
-test('cambriolage, vol en salle et vandalisme : reproductibles et lourds de conséquences', () => {
+test('vol et vandalisme : chaque jour, reproductibles et lourds de conséquences', () => {
   let e = musee([{ id: 1, niveau: 3 }, { id: 2, niveau: 3, support: 'sculpture' }]);
   e = accrocher(e, 1, 's1', 0);
   e = accrocher(e, 2, 's1', 1);
   e.personnel.employes = [];
   const rep = e.reputation;
   const faits = [];
-  for (let j = 20000; j < 20700 && faits.length < 2; j += 7) faits.push(...tirages(cfg, e, j));
+  for (let j = 20000; j < 20700 && faits.length < 2; j++) faits.push(...tirages(cfg, e, j));
   assert.ok(faits.length >= 1);
   assert.ok(e.reputation < rep, 'la réputation baisse');
   assert.ok(e.bonusPermanents < 0, 'la confiance aussi, durablement');
@@ -263,9 +280,11 @@ test('cambriolage, vol en salle et vandalisme : reproductibles et lourds de cons
     const o = e.oeuvres[f.oeuvre];
     if (f.type === 'vandalisme') {
       assert.equal(o.lieu, 'reserve');
-      assert.ok(o.progression <= 0.85 && o.progression >= 0.6);
+      assert.equal(o.progression, 1, 'la restauration reste acquise');
+      assert.ok(o.usure >= cfg.usure.vandalisme[0] && o.usure <= cfg.usure.vandalisme[1]);
     } else {
       assert.equal(o.lieu, 'volee');
+      assert.ok(e.indemnites > 0, 'l\'assurance rembourse une part');
     }
   }
 });
@@ -298,9 +317,10 @@ test('emprunts : un musée ne prête un Trésor qu\'à un musée sûr', () => {
   const demande = { id: 'x', theme, oeuvres: [1, 2, 3, 4, 5], emprunts: [tresor] };
   assert.ok(!peutEmprunter(cfg, e, 5, 20000));
   assert.throws(() => ouvrirExposition(cfg, e, demande, 20000, musees), /risque sous 1,5 %|risque sous 1.5 %/);
-  e.investissements = ['securite1', 'securite2', 'vitrines', 'portiques'];
-  for (let i = 0; i < 6; i++) employe(e, 'surete', 400 * 60);
-  for (let i = 0; i < 4; i++) employe(e, 'veilleur', 400 * 60);
+  e.investissements = ['portiques'];
+  for (const sl of ['s1', 's2']) e.securite.salles[sl] = ['porte', 'alarme', 'vitrines', 'norme1', 'norme2'];
+  for (let i = 0; i < 4; i++) employe(e, 'surete', 400 * 60, ['s1']);
+  for (let i = 0; i < 4; i++) employe(e, 'surete', 400 * 60, ['s2']);
   assert.ok(peutEmprunter(cfg, e, 5, 20000));
   assert.ok(ouvrirExposition(cfg, e, demande, 20000, musees).etat.expositions.courante);
 });
@@ -325,7 +345,7 @@ test('migration : un état du premier format reçoit son personnel', () => {
   const m = migrer(e, cfg);
   assert.deepEqual(m.investissements, ['cafe']);
   assert.deepEqual(m.personnel.employes.map((x) => x.role), ['gardien', 'mediateur']);
-  assert.equal(m.format, 3);
+  assert.equal(m.format, 4);
   assert.equal(niveauEmploye(cfg, m.personnel.employes[1].minutes), 3);
   assert.ok(effetsPersonnel(cfg, m).satisfaction > 0);
   assert.ok(masseSalariale(cfg, m) > 0);
@@ -338,14 +358,30 @@ test('migration : l\'agent de sécurité du format 2 devient veilleur de nuit', 
   assert.equal(migrer(e, cfg).personnel.employes.at(-1).role, 'veilleur');
 });
 
-test('un matériel qui ouvre un métier amène aussitôt un premier candidat', () => {
+test('un matériel qui ouvre un métier amène aussitôt un premier candidat, affecté à l\'embauche', () => {
   const e = musee();
   e.statut = 2;
-  const r = investir(cfg, e, { quoi: 'inv:video' }, 20000);
+  const r = installer(cfg, e, { lieu: 's1', materiel: 'cameras' });
   const c = r.etat.personnel.candidats.at(-1);
   assert.equal(c.role, 'operateur');
-  assert.equal(c.expire, 20007);
-  assert.ok(embaucher(cfg, r.etat, { candidat: c.id }, 20000).etat.personnel.employes.some((x) => x.role === 'operateur'));
+  const embauche = embaucher(cfg, r.etat, { candidat: c.id }, 20000).etat.personnel.employes.find((x) => x.role === 'operateur');
+  assert.equal(embauche.affectation.length, 1);
+});
+
+test('migration : le matériel commun s\'installe dans la salle la plus précieuse', () => {
+  let e = musee([{ id: 1, niveau: 3 }]);
+  e = accrocher(e, 1, 's2', 0);
+  e.format = 3;
+  e.investissements = ['cafe', 'serrures', 'video', 'salleForte', 'portiques'];
+  delete e.securite.salles;
+  e.personnel.employes.forEach((x) => delete x.affectation);
+  e.personnel.employes.push({ id: 'v', nom: 'V', role: 'veilleur', minutes: 0 });
+  const m = migrer(e, cfg);
+  assert.deepEqual(m.investissements, ['cafe', 'portiques']);
+  assert.deepEqual(m.securite.salles.s2, ['porte', 'cameras']);
+  assert.deepEqual(m.securite.salles.reserve, ['blindage']);
+  assert.deepEqual(m.personnel.employes.find((x) => x.role === 'gardien').affectation, ['s2']);
+  assert.deepEqual(m.personnel.employes.find((x) => x.id === 'v').affectation, ['s2']);
 });
 
 /* ---------- Atelier ---------- */
@@ -387,7 +423,7 @@ test("collection privée : à l'abri des cambrioleurs, et un repos qui ravive", 
   e = accrocher(e, 1, 's1', 0);
   e.oeuvres[1].joursExpo = 300;
   e = deplacer(cfg, e, { oeuvre: 1, vers: { lieu: 'privee' } }, 20000).etat;
-  assert.equal(risques(cfg, e, 20000).nuit, 0);
+  assert.equal(Object.values(risques(cfg, e, 20000)).reduce((t, x) => t + x.vol, 0), 0);
   e = deplacer(cfg, e, { oeuvre: 1, vers: { lieu: 'espace', espace: 's1', place: 0 } }, 20000 + cfg.atelier.reposPriveeJours).etat;
   assert.ok(e.oeuvres[1].joursExpo < 300);
 });

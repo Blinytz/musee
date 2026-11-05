@@ -21,7 +21,7 @@ import { avancerChantiers } from '../js/moteur/charges.js';
 const cfg = configEffective({});
 const T = cfg.temps;
 // Pour les scénarios longs : sans cambriolage, une œuvre ne disparaît pas.
-const cfgSansVol = configEffective({ securite: { menaces: { nuit: { max: 0, min: 0 }, jour: { max: 0, min: 0 }, vandalisme: { max: 0, min: 0 } } } });
+const cfgSansVol = configEffective({ securite: { menaces: { vol: { max: 0, min: 0 }, vandalisme: { max: 0, min: 0 } } } });
 
 function etatAvec(oeuvres = [], options = {}) {
   const etat = creerEtat(cfg, { nom: 'Test', jour: 20000, graine: 'g' });

@@ -12,13 +12,15 @@ import {
 } from './personnel.js';
 import {
   espace, contenuEspace, refusAccrochage, reserveLibre, priveeLibre, atelierLibre,
-  prixAile, prixSalle, prixAgrandissement, prixReserve, prixPrivee, aileDisponible, prixAtelier,
+  prixAile, prixSalle, prixAgrandissement, prixReserve, prixPrivee, aileDisponible, prixAtelier, normeLieu,
 } from './batiment.js';
 import { tauxHoraire, visiteursDuJour } from './visiteurs.js';
 import { tableau } from './classement.js';
 import { debloque } from './arrivages.js';
 import { copie, evenement } from './etat.js';
-import { peutEmprunter, seuilEmprunt } from './securite.js';
+import {
+  peutEmprunter, seuilEmprunt, lieuxSecurises, materielDe, materielPossible, prixMateriel, affectationParDefaut,
+} from './securite.js';
 import { bonusReputation } from './journee.js';
 import { entrerDansLePublic, sortirDuPublic } from './lieux.js';
 import { chargesHoraires, ouvrirChantier, avancerChantiers } from './charges.js';
@@ -357,6 +359,48 @@ export function investir(cfg, etat0, { quoi }, jour = etat0.jourFerme + 1) {
   return { etat, depense: { montant: prix, cle, motif, type: 'investissement', meta: { quoi } } };
 }
 
+/* ---------- Sécurité salle par salle ---------- */
+
+/** Installe un matériel de sécurité dans un espace (salle, réserve, atelier). */
+export function installer(cfg, etat0, { lieu, materiel }) {
+  const etat = copie(etat0);
+  const l = lieuxSecurises(cfg, etat).find((x) => x.id === lieu);
+  if (!l) refuser('Espace inconnu');
+  const m = cfg.materielSalle.find((x) => x.id === materiel);
+  if (!m) refuser('Matériel inconnu');
+  if (!materielPossible(m, l.type)) refuser('Ne s\'installe pas ici');
+  const deja = materielDe(etat, lieu);
+  if (deja.includes(materiel)) refuser('Déjà installé');
+  if (m.statutMin && etat.statut < m.statutMin) refuser(`Statut requis : ${cfg.statuts[m.statutMin].nom}`);
+  if (m.prerequis && !deja.includes(m.prerequis)) refuser(`D'abord : ${cfg.materielSalle.find((x) => x.id === m.prerequis)?.nom}`);
+  etat.securite.salles = { ...(etat.securite.salles || {}), [lieu]: [...deja, materiel] };
+  // Un matériel qui ouvre un métier amène son premier candidat.
+  for (const r of cfg.personnel.roles.filter((x) => x.equipement === materiel)) {
+    if (!etat.personnel || etat.personnel.candidats.some((c) => c.role === r.id)) continue;
+    etat.personnel.candidats.push({
+      ...personne(cfg, { id: `c${etat.jourFerme + 1}-${materiel}`, role: r.id, niveau: 1, graine: `${etat.graine}:${materiel}` }),
+      expire: etat.jourFerme + 1 + cfg.personnel.validiteCandidatsJours,
+    });
+  }
+  return {
+    etat,
+    depense: { montant: prixMateriel(m, l), cle: `musee:materiel:${lieu}:${materiel}`, motif: `${m.nom} : ${l.nom}`, type: 'investissement', meta: { lieu, materiel } },
+  };
+}
+
+/** Affecte un agent de sécurité à une, deux ou trois salles. */
+export function affecter(cfg, etat0, { employe, lieux }) {
+  const etat = copie(etat0);
+  const x = etat.personnel.employes.find((e) => e.id === employe);
+  if (!x) refuser('Employé introuvable');
+  if (!roleDe(cfg, x.role)?.menaces) refuser('Ce métier ne s\'affecte pas');
+  const connus = new Set(lieuxSecurises(cfg, etat).map((l) => l.id));
+  const liste = [...new Set(lieux)].filter((id) => connus.has(id));
+  if (liste.length > cfg.securite.sallesParAgent) refuser(`${cfg.securite.sallesParAgent} salles au plus`);
+  x.affectation = liste;
+  return { etat };
+}
+
 /* ---------- Communication ---------- */
 
 export function etatCampagne(cfg, etat, jour) {
@@ -475,7 +519,7 @@ export function ouvrirExposition(cfg, etat0, { id, theme, oeuvres, emprunts }, j
     if (!['espace', 'reserve', 'privee'].includes(o.lieu)) refuser(`${o.titre} : indisponible`);
     if (!estConforme(o, theme)) refuser(`${o.titre} : hors thème`);
     const requise = cfg.securiteRequise[o.niveau] || 0;
-    if (requise > effets(cfg, etat).securite) refuser(`${o.titre} : sécurité niveau ${requise} requise`);
+    if (requise > normeLieu(cfg, etat, 'exposition')) refuser(`${o.titre} : sécurité niveau ${requise} requise dans la salle d'exposition`);
   }
   const preteurs = new Set(museesPreteurs(cfg, etat, musees || []));
   for (const em of emprunts) {
@@ -700,7 +744,10 @@ export function embaucher(cfg, etat0, { candidat }, jour) {
   const frais = fraisRecrutement(cfg, etat, c);
   p.candidats = p.candidats.filter((x) => x.id !== candidat);
   const { expire, niveau: n, ...personne } = c;
-  p.employes.push({ ...personne, id: `e${c.id.slice(1)}`, embaucheLe: jour });
+  const recrue = { ...personne, id: `e${c.id.slice(1)}`, embaucheLe: jour };
+  // Un agent de sécurité prend tout de suite son poste.
+  if (roleDe(cfg, c.role)?.menaces) recrue.affectation = affectationParDefaut(cfg, etat, recrue);
+  p.employes.push(recrue);
   return {
     etat,
     depense: {

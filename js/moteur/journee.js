@@ -198,9 +198,10 @@ export async function ouvrirJour(cfg, etat, J, ctx) {
     }
   }
 
-  // Sécurité : le tirage du dimanche, puis l'enquête sur les œuvres volées.
-  if (etat.securite && jourSemaine(J) === cfg.securite.jourSemaine) {
-    rapport.faits.push(...enquete(cfg, etat, J));
+  // Sécurité : l'enquête de la police chaque dimanche, et chaque jour les
+  // tirages de vol et de vandalisme, salle par salle.
+  if (etat.securite) {
+    if (jourSemaine(J) === cfg.securite.jourSemaine) rapport.faits.push(...enquete(cfg, etat, J));
     rapport.faits.push(...tirages(cfg, etat, J));
   }
 

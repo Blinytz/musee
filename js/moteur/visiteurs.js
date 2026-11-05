@@ -8,7 +8,7 @@ import {
   prestige, nouveaute, estConforme, facteurPrix, facteurReputation, effets, borner,
 } from './regles.js';
 import { espacesPublics, placesPubliques, contenuEspace } from './batiment.js';
-import { effetsPersonnel } from './personnel.js';
+import { effetsPersonnel, employes } from './personnel.js';
 import { facteurUsure } from './atelier.js';
 
 /**
@@ -30,9 +30,15 @@ export function espacesOuverts(cfg, etat, jour) {
     aGarder.push({ id: 'exposition', valeur });
   }
   aGarder.sort((a, b) => b.valeur - a.valeur || String(a.id).localeCompare(String(b.id)));
-  const gardiens = effetsPersonnel(cfg, etat).gardiens;
-  const ouverts = new Set(aGarder.slice(0, gardiens).map((e) => e.id));
-  return { ouverts, aGarder: aGarder.length, fermes: aGarder.slice(gardiens).map((e) => e.id) };
+  const gardiens = employes(etat, 'gardien');
+  const couverts = new Set(gardiens.flatMap((g) => g.affectation || []));
+  let libres = gardiens.filter((g) => !(g.affectation || []).length).length;
+  const ouverts = new Set();
+  for (const e of aGarder) {
+    if (couverts.has(e.id)) ouverts.add(e.id);
+    else if (libres > 0) { ouverts.add(e.id); libres--; }
+  }
+  return { ouverts, aGarder: aGarder.length, fermes: aGarder.filter((e) => !ouverts.has(e.id)).map((e) => e.id) };
 }
 
 /** Multiplicateur des campagnes actives le jour `jour`. */

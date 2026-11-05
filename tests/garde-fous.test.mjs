@@ -55,7 +55,7 @@ test('le service worker ne supprime que ses propres caches (origine partagée)',
 test('équilibrage : à partir du statut national, à moins de 15 % des repères de la spec', async () => {
   // Sans cambriolage : un vol tiré au mauvais moment déplacerait les délais
   // de quelques jours sans rien dire de l'équilibrage.
-  const cfg = configEffective({ securite: { menaces: { nuit: { max: 0, min: 0 }, jour: { max: 0, min: 0 }, vandalisme: { max: 0, min: 0 } } } });
+  const cfg = configEffective({ securite: { menaces: { vol: { max: 0, min: 0 }, vandalisme: { max: 0, min: 0 } } } });
   const reperes = { 3: [5, 3.5, 2.7].map((m) => m * 30.44), 4: [17, 10, 8].map((m) => m * 30.44), 5: [2.6, 1.6, 1.1].map((a) => a * 365) };
   for (const [k, h] of [2, 3, 4].entries()) {
     const r = await simuler(cfg, h);

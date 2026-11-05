@@ -193,21 +193,14 @@ export const CONFIG = {
     { id: 'imagerie', categorie: 'atelier', nom: 'Laboratoire d\'imagerie', prix: 50000, effets: { efficacite: 0.10 } },
     { id: 'bibliotheque', categorie: 'documentation', nom: 'Bibliothèque', prix: 3000, effets: { revele: 1, remise: 0.10 } },
     { id: 'archives', categorie: 'documentation', nom: 'Archives', prix: 25000, prerequis: 'bibliotheque', effets: { revele: 2, remise: 0.20 } },
-    // Matériel de sécurité (docs/ECONOMIE.md, section 3). `nuit`, `jour`,
-    // `vandalisme` : protection contre chaque menace. `electronique` : renforcé
-    // par le technicien. `requiert` : métier sans lequel le matériel ne donne
-    // que la part `sans` de sa protection.
-    { id: 'serrures', categorie: 'securite', nom: 'Serrures renforcées', prix: 300, effets: { nuit: 5 } },
-    { id: 'alarme', categorie: 'securite', nom: 'Alarme', prix: 2000, statutMin: 1, effets: { nuit: 20, electronique: true } },
-    { id: 'video', categorie: 'securite', nom: 'Vidéosurveillance', prix: 8000, statutMin: 2, effets: { nuit: 30, jour: 30, electronique: true, requiert: 'operateur', sans: 0.5 } },
-    { id: 'portiques', categorie: 'securite', nom: 'Portiques de détection', prix: 6000, statutMin: 2, effets: { jour: 10, vandalisme: 30, electronique: true } },
-    { id: 'salleForte', categorie: 'securite', nom: 'Salle forte', prix: 12000, statutMin: 2, effets: { salleForte: true } },
+    // Matériel de sécurité commun à tout le musée (docs/ECONOMIE.md, section
+    // 3) : les portiques de l'entrée, le poste central, le chenil, les
+    // drones. Le reste s'installe salle par salle (`materielSalle`).
+    // `requiert` : métier sans lequel le matériel ne donne que la part `sans`.
+    { id: 'portiques', categorie: 'securite', nom: 'Portiques de détection', prix: 6000, statutMin: 2, effets: { vandalisme: 15, electronique: true } },
     { id: 'chenil', categorie: 'securite', nom: 'Chenil', prix: 10000, statutMin: 3, effets: {} },
-    { id: 'vitrines', categorie: 'securite', nom: 'Vitrines sécurisées', prix: 25000, statutMin: 3, effets: { jour: 80, vandalisme: 120 } },
-    { id: 'pcSecurite', categorie: 'securite', nom: 'Poste central de sécurité', prix: 30000, statutMin: 3, effets: { nuit: 20, jour: 20 } },
-    { id: 'securite1', categorie: 'securite', nom: 'Sécurité niveau 1', prix: 40000, statutMin: 4, effets: { securite: 1, nuit: 200, jour: 100, vandalisme: 60 } },
-    { id: 'drones', categorie: 'securite', nom: 'Drones de surveillance', prix: 60000, statutMin: 4, effets: { nuit: 120, electronique: true, requiert: 'pilote', sans: 0 } },
-    { id: 'securite2', categorie: 'securite', nom: 'Sécurité niveau 2', prix: 150000, statutMin: 5, prerequis: 'securite1', effets: { securite: 2, nuit: 500, jour: 300, vandalisme: 300 } },
+    { id: 'pcSecurite', categorie: 'securite', nom: 'Poste central de sécurité', prix: 30000, statutMin: 3, effets: {} },
+    { id: 'drones', categorie: 'securite', nom: 'Drones de surveillance', prix: 60000, statutMin: 4, effets: { vol: 40, electronique: true, requiert: 'pilote', sans: 0 } },
   ],
   // Niveau de sécurité requis pour exposer un niveau d'œuvre.
   securiteRequise: { 4: 1, 5: 2 },
@@ -290,17 +283,18 @@ export const CONFIG = {
     // élevés. Moyennes de 1 : l'équilibrage d'ensemble ne bouge pas.
     profil: { efficaciteMin: 0.75, efficaciteMax: 1.25, suit: 0.6, ecart: 0.3, salaireMin: 0.75, salaireMax: 1.3 },
     roles: [
-      // Sécurité. `menaces` : protection par niveau contre chaque menace ;
-      // `equipement` : matériel sans lequel le métier n'existe pas.
-      { id: 'gardien', nom: 'Gardien de salle', pluriel: 'Gardiens de salle', famille: 'securite', statutMin: 0, base: 0.5, poids: 4, menaces: { nuit: 1, jour: 3 } },
-      { id: 'veilleur', nom: 'Veilleur de nuit', pluriel: 'Veilleurs de nuit', famille: 'securite', statutMin: 1, base: 0.5, poids: 2, menaces: { nuit: 6 } },
-      { id: 'surete', nom: 'Agent de sûreté', pluriel: 'Agents de sûreté', famille: 'securite', statutMin: 2, equipement: 'portiques', base: 0.5, poids: 2, menaces: { jour: 2, vandalisme: 8 } },
-      { id: 'operateur', nom: 'Opérateur vidéo', pluriel: 'Opérateurs vidéo', famille: 'securite', statutMin: 2, equipement: 'video', base: 0.6, poids: 2, menaces: { nuit: 4, jour: 4 } },
-      { id: 'maitreChien', nom: 'Maître-chien', pluriel: 'Maîtres-chiens', famille: 'securite', statutMin: 3, equipement: 'chenil', base: 0.7, poids: 1, menaces: { nuit: 12 } },
+      // Sécurité. `menaces` : protection par niveau, partagée entre les salles
+      // que l'agent couvre ; `equipement` : matériel sans lequel le métier
+      // n'existe pas (global, ou installé dans au moins une salle).
+      { id: 'gardien', nom: 'Gardien de salle', pluriel: 'Gardiens de salle', famille: 'securite', statutMin: 0, base: 0.5, poids: 4, menaces: { vol: 4 } },
+      { id: 'veilleur', nom: 'Veilleur de nuit', pluriel: 'Veilleurs de nuit', famille: 'securite', statutMin: 1, base: 0.5, poids: 2, menaces: { vol: 6 } },
+      { id: 'surete', nom: 'Agent de sûreté', pluriel: 'Agents de sûreté', famille: 'securite', statutMin: 2, equipement: 'portiques', base: 0.5, poids: 2, menaces: { vol: 2, vandalisme: 8 } },
+      { id: 'operateur', nom: 'Opérateur vidéo', pluriel: 'Opérateurs vidéo', famille: 'securite', statutMin: 2, equipement: 'cameras', base: 0.6, poids: 2, menaces: { vol: 8 } },
+      { id: 'maitreChien', nom: 'Maître-chien', pluriel: 'Maîtres-chiens', famille: 'securite', statutMin: 3, equipement: 'chenil', base: 0.7, poids: 1, menaces: { vol: 12 } },
       { id: 'technicien', nom: 'Technicien de sécurité', pluriel: 'Techniciens de sécurité', famille: 'securite', statutMin: 1, equipement: 'alarme', base: 0.8, poids: 1, unique: true, materielBase: 0.10, materielNiveau: 0.03 },
       { id: 'chefSecurite', nom: 'Chef de la sécurité', pluriel: 'Chefs de la sécurité', famille: 'securite', statutMin: 3, equipement: 'pcSecurite', base: 1.2, poids: 1, unique: true, humainBase: 0.10, humainNiveau: 0.03 },
       { id: 'enqueteur', nom: 'Enquêteur', pluriel: 'Enquêteurs', famille: 'securite', statutMin: 3, base: 1, poids: 1, unique: true, enqueteBase: 0.03, enqueteNiveau: 0.015 },
-      { id: 'pilote', nom: 'Pilote de drone', pluriel: 'Pilotes de drone', famille: 'securite', statutMin: 4, equipement: 'drones', base: 1, poids: 1, menaces: { nuit: 25 } },
+      { id: 'pilote', nom: 'Pilote de drone', pluriel: 'Pilotes de drone', famille: 'securite', statutMin: 4, equipement: 'drones', base: 1, poids: 1, menaces: { vol: 25 } },
       { id: 'assistant', nom: 'Assistant restaurateur', pluriel: 'Assistants restaurateurs', statutMin: 1, base: 1, poids: 2, partBase: 0.12, partNiveau: 0.03, plafond: 0.30 },
       { id: 'mediateur', nom: 'Médiateur', pluriel: 'Médiateurs', statutMin: 0, base: 0.6, poids: 2, satisfactionBase: 1.5, satisfactionNiveau: 0.5, plafondTotal: 15 },
       { id: 'accueil', nom: 'Agent d\'accueil', pluriel: 'Agents d\'accueil', statutMin: 0, base: 0.5, poids: 2, densiteBase: 0.06, densiteNiveau: 0.02 },
@@ -312,28 +306,50 @@ export const CONFIG = {
     ],
   },
 
-  // Sécurité (docs/ECONOMIE.md, section 3). Probabilité par semaine = base ×
-  // risque / (protection + plancher), bornée entre min et max. Un incident
-  // coûte `reputation` points tout de suite et `confiance` points durables
-  // (retirés des bonus permanents).
+  // Sécurité (docs/ECONOMIE.md, section 3), salle par salle. Chaque jour, à
+  // une heure tirée au hasard, chaque espace subit un tirage de vol et un de
+  // vandalisme : probabilité par jour = base × risque / (protection +
+  // plancher), bornée entre min et max. Le risque vient des œuvres de
+  // l'espace, la protection de son matériel et des agents qui le couvrent.
+  // Un incident coûte `reputation` points tout de suite et `confiance`
+  // points durables (retirés des bonus permanents).
   securite: {
-    jourSemaine: 0, // dimanche, 4 h
+    jourSemaine: 0, // l'enquête de la police, chaque dimanche
     menaces: {
-      nuit: { nom: 'Cambriolage', base: 0.03, plancher: 5, min: 0.003, max: 0.35, reputation: 3, confiance: 1 },
-      jour: { nom: 'Vol en salle', base: 0.02, plancher: 5, min: 0.002, max: 0.25, reputation: 2, confiance: 0.5, densiteRef: 100, affluenceMax: 3 },
-      vandalisme: { nom: 'Vandalisme', base: 0.02, plancher: 20, min: 0, max: 0.2, reputation: 2, confiance: 0.5, exposant: 1.5, diviseur: 10, degatsMin: 0.15, degatsMax: 0.40 },
+      vol: { nom: 'Vol', base: 0.0035, plancher: 4, min: 0.0002, max: 0.05, reputation: 3, confiance: 1 },
+      vandalisme: { nom: 'Vandalisme', base: 0.003, plancher: 15, min: 0, max: 0.03, reputation: 2, confiance: 0.5, exposant: 1.5, diviseur: 10 },
     },
-    // Poids d'une œuvre dans le risque de cambriolage selon son emplacement.
-    poids: { espace: 1, exposition: 1, privee: 0, reserve: 0.6, reserveForte: 0.2, atelier: 0.5 },
-    // Vol en salle : ce qui se glisse sous un manteau part plus facilement.
+    // Affluence : une salle bondée cache mieux un voleur (0,5 + densité / ref, plafonnée).
+    affluence: { densiteRef: 100, max: 3 },
+    // Poids d'une œuvre dans le risque de vol selon son emplacement.
+    poids: { espace: 1, exposition: 1, privee: 0, reserve: 0.6, reserveBlindee: 0.2, atelier: 0.5 },
+    // Ce qui se glisse sous un manteau part plus facilement.
     portabilite: { estampe: 2, photographie: 2, peinture: 1, sculpture: 0.5 },
+    // Un agent couvre au plus ce nombre de salles ; sa protection s'y partage.
+    sallesParAgent: 3,
     enquete: 0.07,
     enqueteSemaines: 26,
-    degats: 0.20,
-    // Risque maximal (par semaine, toutes menaces) qu'un prêteur accepte selon
-    // le niveau de l'œuvre empruntée pour une exposition.
+    // Risque maximal (par semaine, vol et vandalisme de la salle la plus
+    // exposée) qu'un prêteur accepte selon le niveau de l'œuvre empruntée.
     seuilsEmprunt: { 3: 0.05, 4: 0.03, 5: 0.015 },
   },
+
+  // Matériel installé dans un espace précis. Son prix suit la taille de la
+  // salle (× places / 6). `vol`, `vandalisme` : protection de cet espace ;
+  // `electronique` : renforcé par le technicien ; `requiert` : agent affecté
+  // à la salle sans lequel il ne donne que `sans` ; `norme` : niveau de
+  // sécurité exigé pour accrocher Chefs-d'œuvre (1) et Trésors (2) ;
+  // `blindage` : la réserve n'attire presque plus les cambrioleurs ;
+  // `lieux` : espaces où il s'installe (salles publiques par défaut).
+  materielSalle: [
+    { id: 'porte', nom: 'Porte blindée', prix: 300, statutMin: 0, vol: 5, lieux: ['public', 'reserve', 'atelier'] },
+    { id: 'alarme', nom: 'Alarme', prix: 1500, statutMin: 1, vol: 15, electronique: true, lieux: ['public', 'reserve', 'atelier'] },
+    { id: 'cameras', nom: 'Caméras', prix: 4000, statutMin: 2, vol: 20, vandalisme: 15, electronique: true, requiert: 'operateur', sans: 0.5, lieux: ['public', 'reserve', 'atelier'] },
+    { id: 'vitrines', nom: 'Vitrines sécurisées', prix: 8000, statutMin: 3, vol: 40, vandalisme: 60, lieux: ['public'] },
+    { id: 'blindage', nom: 'Blindage', prix: 12000, statutMin: 2, blindage: true, lieux: ['reserve'] },
+    { id: 'norme1', nom: 'Sécurité niveau 1', prix: 20000, statutMin: 4, norme: 1, vol: 60, vandalisme: 30, lieux: ['public'] },
+    { id: 'norme2', nom: 'Sécurité niveau 2', prix: 60000, statutMin: 5, prerequis: 'norme1', norme: 2, vol: 150, vandalisme: 100, lieux: ['public'] },
+  ],
 
 
   // Clé publique VAPID des notifications, la même que WikiDeck (publiée dans

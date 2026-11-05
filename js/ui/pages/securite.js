@@ -1,12 +1,14 @@
-// Sécurité : trois menaces, le matériel, l'équipe, les prêteurs, les œuvres
-// volées. Chaque menace et chaque matériel ouvre sa fiche détaillée.
+// Sécurité, salle par salle : le risque de tout le musée, chaque salle avec
+// son matériel et ses agents, le matériel commun, les prêteurs, les œuvres
+// volées. Menaces, salles et matériel ouvrent leur fiche détaillée.
 
 import { h, icone, nombre, dateJour, ajouter, pourcent } from '../dom.js';
-import { MENACES, probabilites, risqueMaximal, chanceEnquete, seuilEmprunt } from '../../moteur/securite.js';
-import { ficheMenace, ficheMateriel, niveauRisque, resumeMateriel } from '../fiches.js';
+import {
+  MENACES, probabilites, risqueMaximal, chanceEnquete, seuilEmprunt, risqueMusee, lieuxSecurises, materielDe, affectation,
+} from '../../moteur/securite.js';
+import { ficheMenace, ficheMateriel, ficheSalle, niveauRisque, resumeMateriel, risqueSalle } from '../fiches.js';
 import { catalogueInvestissements } from '../../moteur/actions.js';
 import { employes, role } from '../../moteur/personnel.js';
-import { prochainJourSemaine } from '../../moteur/temps.js';
 
 const pct = (p) => `${(p * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`;
 
@@ -15,14 +17,15 @@ export async function afficher(app, vue) {
   const e = jeu.etat;
   const cfg = jeu.cfg;
   const jour = jeu.jour();
-  const p = probabilites(cfg, e, jour);
-  const tirage = prochainJourSemaine(jour, cfg.securite.jourSemaine);
+  const p = risqueMusee(cfg, e, jour);
+  const p7 = probabilites(cfg, e, jour);
   // La jauge se remplit avec le risque : pleine à 10 % par semaine.
   const plein = 0.10;
+  const agents = employes(e).filter((x) => role(cfg, x.role)?.menaces);
 
   ajouter(vue,
-    h('div.section', h('h2', 'Sécurité'), h('span.aside', `Tirage le ${dateJour(tirage, { weekday: 'long' })}`)),
-    h('div.menaces', MENACES.map((m) => {
+    h('div.section', h('h2', 'Sécurité'), h('span.aside', 'Par semaine, tout le musée')),
+    h('div.menaces.deux', MENACES.map((m) => {
       const n = niveauRisque(p[m]);
       return h('button.menace', { type: 'button', onclick: () => ficheMenace(app, m) },
         h('b', cfg.securite.menaces[m].nom),
@@ -31,6 +34,22 @@ export async function afficher(app, vue) {
         h('small', n.mot));
     })),
   );
+
+  // Chaque espace : son risque, son matériel, ses agents.
+  ajouter(vue, h('div.section', h('h2', 'Salles')),
+    h('div.entrees', lieuxSecurises(cfg, e).map((l) => {
+      const q = risqueSalle(p7, l.id);
+      const n = niveauRisque(q);
+      const nbAgents = agents.filter((x) => affectation(x).includes(l.id)).length;
+      const nbMateriel = materielDe(e, l.id).length;
+      return h('button.entree', { type: 'button', onclick: () => ficheSalle(app, l.id) },
+        h('span', h('b', l.nom), h('small', [
+          nbMateriel ? `${nbMateriel} matériel${nbMateriel > 1 ? 's' : ''}` : 'Aucun matériel',
+          nbAgents ? `${nbAgents} agent${nbAgents > 1 ? 's' : ''}` : 'aucun agent',
+        ].join(' · '))),
+        q > 0 ? h('span.puce', { style: { color: n.couleur } }, pct(q)) : h('span.puce', 'Vide'),
+        icone('droite'));
+    })));
 
   // Ce que les prêteurs exigent avant de confier une œuvre.
   const pire = risqueMaximal(cfg, e, jour);
@@ -48,7 +67,7 @@ export async function afficher(app, vue) {
   // Matériel, avec ce qu'il couvre et le métier qu'il ouvre.
   const ouvre = (id) => cfg.personnel.roles.find((x) => x.equipement === id);
   const materiel = catalogueInvestissements(cfg, e).filter((x) => x.categorie === 'securite');
-  ajouter(vue, h('div.section', h('h2', 'Matériel')),
+  ajouter(vue, h('div.section', h('h2', 'Matériel commun')),
     h('div.entrees', materiel.map((x) => {
       const f = x.effets || {};
       const metier = ouvre(x.id.replace(/^inv:/, ''));
@@ -88,9 +107,10 @@ export async function afficher(app, vue) {
 
   const histo = [...(e.securite?.historique || [])].reverse().slice(0, 12);
   if (histo.length) {
-    const libelle = { vol: 'Cambriolage', volSalle: 'Vol en salle', vandalisme: 'Vandalisme', retrouvee: 'Retrouvée', perdue: 'Perdue' };
+    const libelle = { vol: 'Vol', volSalle: 'Vol en salle', vandalisme: 'Vandalisme', retrouvee: 'Retrouvée', perdue: 'Perdue' };
+    const lieux = new Map(lieuxSecurises(cfg, e).map((l) => [l.id, l.nom]));
     ajouter(vue, h('div.section', h('h2', 'Historique')),
       h('div.pile', { style: { gap: '4px' } }, histo.map((x) => h('div.ligne.espace',
-        h('span', x.titre), h('span.tres-discret', `${libelle[x.type] || x.type} · ${dateJour(x.jour)}`)))));
+        h('span', x.titre), h('span.tres-discret', [libelle[x.type] || x.type, lieux.get(x.lieu), dateJour(x.jour), x.heure !== undefined ? `${x.heure} h` : null].filter(Boolean).join(' · '))))));
   }
 }

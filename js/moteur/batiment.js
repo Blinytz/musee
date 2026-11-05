@@ -89,8 +89,13 @@ export function refusAccrochage(cfg, etat, oeuvre, espaceId) {
       : e.type === 'jardin' ? 'Sculptures uniquement' : 'Support non exposable ici';
   }
   const requise = cfg.securiteRequise[oeuvre.niveau] || 0;
-  if (requise > effets(cfg, etat).securite) return `Sécurité niveau ${requise} requise`;
+  if (requise > normeLieu(cfg, etat, espaceId)) return `Sécurité niveau ${requise} requise dans cette salle`;
   return null;
+}
+
+/** Niveau de sécurité installé dans un espace (voir securite.js, normeDe). */
+export function normeLieu(cfg, etat, lieu) {
+  return (etat.securite?.salles?.[lieu] || []).reduce((n, id) => Math.max(n, cfg.materielSalle?.find((m) => m.id === id)?.norme || 0), 0);
 }
 
 /* ---------- Prix des agrandissements ---------- */

@@ -28,12 +28,13 @@ import { CONFIG, configEffective } from '../js/config.js';
 import { creerEtat } from '../js/moteur/etat.js';
 import { fermerJour, ouvrirJour } from '../js/moteur/journee.js';
 import {
-  demarrerSession, terminerSession, deplacer, investir, confierAtelier,
+  demarrerSession, terminerSession, deplacer, investir, confierAtelier, installer,
 } from '../js/moteur/actions.js';
+import { affectationParDefaut, materielDe, valeurLieu } from '../js/moteur/securite.js';
 import { niveauMaitrise, prixArrivage, bilanFinancier } from '../js/moteur/regles.js';
 import { personne, fraisRecrutement, masseSalariale, rolesOuverts, employes } from '../js/moteur/personnel.js';
 import {
-  espacesPublics, contenuEspace, prixAgrandissement, prixSalle, prixAile, aileDisponible,
+  espacesPublics, contenuEspace, prixAgrandissement, prixSalle, prixAile, aileDisponible, refusAccrochage,
 } from '../js/moteur/batiment.js';
 import { tauxHoraire, espacesOuverts } from '../js/moteur/visiteurs.js';
 import { chargesHoraires } from '../js/moteur/charges.js';
@@ -82,13 +83,44 @@ function lireOptions(argv) {
 }
 
 /** Place publique libre pour une peinture, ou null. */
-function placeLibre(cfg, etat, support) {
+function placeLibre(cfg, etat, support, oeuvre = null) {
   for (const e of espacesPublics(etat)) {
     if (!(cfg.espaces[e.type]?.supports || []).includes(support)) continue;
+    if (oeuvre && refusAccrochage(cfg, etat, oeuvre, e.id)) continue;
     const i = contenuEspace(etat, e.id).indexOf(null);
     if (i >= 0) return { espace: e.id, place: i };
   }
   return null;
+}
+
+/**
+ * Matériel salle par salle : porte et alarme partout où il y a des œuvres,
+ * caméras dès le régional, vitrines dans les deux salles les plus
+ * précieuses ; le niveau de sécurité qu'il faut là où un Chef-d'œuvre ou un
+ * Trésor doit être accroché. Renvoie le montant dépensé.
+ */
+function equiperSalles(cfg, etat, oeuvreAAccrocher, support) {
+  let paye = 0;
+  let e = etat;
+  const poser = (lieu, id) => {
+    if (materielDe(e, lieu).includes(id)) return;
+    try { const r = installer(cfg, e, { lieu, materiel: id }); e = r.etat; paye += r.depense.montant; } catch { /* statut ou prérequis */ }
+  };
+  const salles = espacesPublics(e).filter((x) => contenuEspace(e, x.id).some((y) => y !== null))
+    .sort((a, b) => valeurLieu(cfg, e, b.id) - valeurLieu(cfg, e, a.id));
+  salles.forEach((sl, rang) => {
+    poser(sl.id, 'porte');
+    poser(sl.id, 'alarme');
+    poser(sl.id, 'cameras');
+    if (rang < 2) poser(sl.id, 'vitrines');
+  });
+  if (e.statut >= 2) poser('reserve', 'blindage');
+  const requise = oeuvreAAccrocher ? cfg.securiteRequise[oeuvreAAccrocher.niveau] || 0 : 0;
+  if (requise && !placeLibre(cfg, e, support, oeuvreAAccrocher)) {
+    const cible = espacesPublics(e).find((x) => contenuEspace(e, x.id).includes(null) && (cfg.espaces[x.type]?.supports || []).includes(support));
+    if (cible) { poser(cible.id, 'norme1'); if (requise >= 2) poser(cible.id, 'norme2'); }
+  }
+  return { etat: e, paye };
 }
 
 /** Achète la capacité la moins chère ; renvoie le prix payé. Un chantier à la fois. */
@@ -170,16 +202,29 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
     // Œuvre achevée : accrochée, sinon en réserve le temps qu'un chantier
     // livre une salle. Les œuvres qui attendent en réserve passent d'abord.
     const o = etat.oeuvres[enCours.id];
-    if (o.progression >= 1) etat = deplacer(cfg, etat, { oeuvre: o.id, vers: { lieu: 'reserve' } }, jour).etat;
+    if (o.progression >= 1) {
+      // Réserve pleine : il l'agrandit.
+      if (etat.batiment.reserve.places - Object.values(etat.oeuvres).filter((y) => y.lieu === 'reserve').length <= 0) {
+        const r = investir(cfg, etat, { quoi: 'reserve' });
+        etat = r.etat;
+        compte.depenses += r.depense.montant;
+        compte.capacite += r.depense.montant;
+      }
+      etat = deplacer(cfg, etat, { oeuvre: o.id, vers: { lieu: 'reserve' } }, jour).etat;
+    }
     for (const x of Object.values(etat.oeuvres).filter((y) => y.lieu === 'reserve' && y.progression >= 1)) {
-      let place = placeLibre(cfg, etat, support);
+      const eq = equiperSalles(cfg, etat, x, support);
+      etat = eq.etat;
+      compte.depenses += eq.paye;
+      compte.securite += eq.paye;
+      let place = placeLibre(cfg, etat, support, x);
       if (!place) {
         const a = agrandir(cfg, etat);
         if (a) {
           etat = a.etat;
           compte.depenses += a.paye;
           compte.capacite += a.paye;
-          place = placeLibre(cfg, etat, support);
+          place = placeLibre(cfg, etat, support, x);
         }
       }
       if (!place) break;
@@ -190,6 +235,8 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
     const recruter = (role) => {
       const g = personne(cfg, { id: `g${embauches++}`, role, niveau: 1, graine: `sim:${embauches}` });
       const frais = fraisRecrutement(cfg, etat, g);
+      // Chaque agent de sécurité prend son poste, comme à l'embauche.
+      if (cfg.personnel.roles.find((r) => r.id === role)?.menaces) g.affectation = affectationParDefaut(cfg, etat, g);
       etat.personnel.employes.push(g);
       compte.depenses += frais;
       compte.recrutement += frais;
@@ -204,7 +251,8 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
     // Réparations : les œuvres les plus usées partent à l'atelier dès qu'un
     // emplacement et un restaurateur sont libres ; s'il en attend trop, il
     // agrandit l'atelier.
-    const usees = Object.values(etat.oeuvres).filter((x) => x.lieu === 'espace' && (x.usure || 0) >= cfg.usure.aReparer * 0.75)
+    const usees = Object.values(etat.oeuvres)
+      .filter((x) => (x.lieu === 'espace' || x.lieu === 'reserve') && x.progression >= 1 && (x.usure || 0) >= cfg.usure.aReparer * 0.75)
       .sort((a, b) => b.usure - a.usure);
     for (const x of usees) {
       try { etat = confierAtelier(cfg, etat, { oeuvre: x.id }, jour).etat; compte.reparations++; } catch { break; }
@@ -272,7 +320,7 @@ function ecart(obtenu, cible) {
 
 async function principal() {
   const opts = lireOptions(process.argv.slice(2));
-  const sansVol = { securite: { menaces: Object.fromEntries(['nuit', 'jour', 'vandalisme'].map((m) => [m, { max: 0, min: 0 }])) } };
+  const sansVol = { securite: { menaces: Object.fromEntries(['vol', 'vandalisme'].map((m) => [m, { max: 0, min: 0 }])) } };
   const cfg = configEffective(opts.vols === false ? sansVol : {});
   const resultats = [];
   for (const h of opts.heures) resultats.push(await simuler(cfg, h, opts));

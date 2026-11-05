@@ -6,7 +6,7 @@
 import { niveau } from './regles.js';
 import { visiteursDuJour, coutVisiteur } from './visiteurs.js';
 import { entretienHoraire } from './batiment.js';
-import { probabilites } from './securite.js';
+import { probabilites, semaine } from './securite.js';
 import { evenement } from './etat.js';
 
 /** Valeur des œuvres exposées (salles et exposition), au prix du catalogue. */
@@ -16,15 +16,35 @@ export function valeurExposee(cfg, etat) {
     .reduce((s, o) => s + niveau(cfg, o.niveau).prix, 0);
 }
 
+/**
+ * Assurance par heure : pour chaque salle, la valeur de ses œuvres exposées,
+ * majorée selon son risque de la semaine. Une salle bien protégée coûte
+ * moins cher à assurer.
+ */
+export function assuranceHoraire(cfg, etat, jour) {
+  const a = cfg.charges.assurance;
+  const p = probabilites(cfg, etat, jour);
+  const valeurs = {};
+  for (const o of Object.values(etat.oeuvres)) {
+    const lieu = o.lieu === 'espace' ? o.espace : o.lieu === 'exposition' ? 'exposition' : null;
+    if (lieu) valeurs[lieu] = (valeurs[lieu] || 0) + niveau(cfg, o.niveau).prix;
+  }
+  let total = 0;
+  for (const [lieu, v] of Object.entries(valeurs)) {
+    const risque = semaine(p[lieu]?.vol || 0) + semaine(p[lieu]?.vandalisme || 0);
+    total += v * a.taux * (1 + a.risque * risque);
+  }
+  return total;
+}
+
 /** Charges par heure de session, hors salaires, avec l'œuvre que l'on restaure. */
 export function chargesHoraires(cfg, etat, jour, niveauOeuvre) {
   const c = cfg.charges;
   if (!c) return {};
-  const risque = Object.values(probabilites(cfg, etat, jour)).reduce((t, p) => t + p, 0);
   return {
     accueil: visiteursDuJour(cfg, etat, jour) * coutVisiteur(cfg, etat),
     entretien: entretienHoraire(cfg, etat),
-    assurance: valeurExposee(cfg, etat) * c.assurance.taux * (1 + c.assurance.risque * risque),
+    assurance: assuranceHoraire(cfg, etat, jour),
     fournitures: c.fournitures[niveauOeuvre] ?? 0,
   };
 }

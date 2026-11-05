@@ -4,7 +4,15 @@
 
 import { personne, tirerCandidats } from './personnel.js';
 
-export const FORMAT = 3;
+export const FORMAT = 4;
+
+// Matériel autrefois commun à tout le musée, désormais installé dans une
+// salle (format 4) : l'ancien identifiant, le nouveau, et où il va.
+const MATERIEL_FORMAT_4 = {
+  serrures: ['porte', 'public'], alarme: ['alarme', 'public'], video: ['cameras', 'public'],
+  vitrines: ['vitrines', 'public'], securite1: ['norme1', 'public'], securite2: ['norme2', 'public'],
+  salleForte: ['blindage', 'reserve'],
+};
 
 export function creerEtat(cfg, { nom, jour, graine }) {
   const d = cfg.depart;
@@ -52,15 +60,17 @@ export function creerEtat(cfg, { nom, jour, graine }) {
     prets: { demande: null, enCours: [], prevue: null, historique: [] },
     personnel: {
       // L'équipe de départ est dans la moyenne : ni affaire, ni boulet.
+      // Le gardien de départ tient la première salle.
       employes: (cfg.depart.personnel || []).map((p, i) => ({
         ...personne(cfg, { id: `e${jour}-d${i}`, role: p.role, niveau: p.niveau, graine: `${graine}:depart:${i}` }),
         efficacite: 1,
         salaire: 1,
+        ...(p.role === 'gardien' ? { affectation: [salles[i]?.id || 's1'] } : {}),
       })),
       candidats: [],
       arrieres: 0,
     },
-    securite: { historique: [] },
+    securite: { historique: [], salles: {} },
     expositions: { courante: null, derniereFin: null, historique: [] },
     classement: null,
     rapports: [],
@@ -112,6 +122,31 @@ export function migrer(etat, cfg = null) {
     // veilleur de nuit.
     for (const x of e.personnel?.employes || []) if (x.role === 'securite') x.role = 'veilleur';
     if (e.personnel) e.personnel.candidats = (e.personnel.candidats || []).map((c) => (c.role === 'securite' ? { ...c, role: 'veilleur' } : c));
+  }
+  if ((e.format || 1) < 4) {
+    // Format 4 : la sécurité se joue salle par salle. Le matériel acheté pour
+    // tout le musée est installé dans la salle la plus précieuse (le blindage
+    // dans la réserve), chaque gardien tient une salle, les autres agents
+    // l'espace le plus précieux.
+    const valeur = (id) => Object.values(e.oeuvres).filter((o) => o.lieu === 'espace' && o.espace === id)
+      .reduce((s, o) => s + (cfg?.niveaux?.[o.niveau]?.prestige ?? 1), 0);
+    const salles = (e.batiment?.salles || []).map((s) => s.id).sort((a, b) => valeur(b) - valeur(a));
+    const precieuse = salles[0] || 's1';
+    e.securite = { historique: [], ...(e.securite || {}), salles: { ...(e.securite?.salles || {}) } };
+    const garde = [];
+    for (const ancien of e.investissements || []) {
+      const cible = MATERIEL_FORMAT_4[ancien];
+      if (!cible) { garde.push(ancien); continue; }
+      const lieu = cible[1] === 'reserve' ? 'reserve' : precieuse;
+      e.securite.salles[lieu] = [...new Set([...(e.securite.salles[lieu] || []), cible[0]])];
+    }
+    e.investissements = garde;
+    let rang = 0;
+    for (const x of e.personnel?.employes || []) {
+      if (x.affectation) continue;
+      if (x.role === 'gardien') x.affectation = [salles[rang++ % Math.max(1, salles.length)] || 's1'];
+      else if (['veilleur', 'surete', 'operateur', 'maitreChien', 'pilote'].includes(x.role)) x.affectation = [precieuse];
+    }
   }
   e.format = FORMAT;
   return e;

@@ -5,14 +5,16 @@
 
 import { h, icone, nombre } from './dom.js';
 import { feuille, portrait, confirmer, cartel } from './composants.js';
-import { MENACES, risques, probabilites, chanceEnquete } from '../moteur/securite.js';
+import {
+  MENACES, risques, probabilites, chanceEnquete, risqueMusee, semaine, lieuxSecurises, materielDe,
+  materielPossible, prixMateriel, affectation, affectationParDefaut,
+} from '../moteur/securite.js';
 import {
   role, refusRole, minutesPourNiveau, niveauEmploye, salaireHoraire, fraisRecrutement, efficacite,
   avecNiveaux, partAssistant, arrieresBloquants,
 } from '../moteur/personnel.js';
 import { visiteursDuJour, espacesOuverts, satisfaction, seuilDensite } from '../moteur/visiteurs.js';
 import { placesPubliques } from '../moteur/batiment.js';
-import { catalogueInvestissements } from '../moteur/actions.js';
 import { prestige } from '../moteur/regles.js';
 
 /* ---------- Textes ---------- */
@@ -38,33 +40,31 @@ const ROLES = {
 };
 
 const MATERIEL = {
-  serrures: 'Portes et fenêtres renforcées. Une première protection contre les cambriolages.',
-  alarme: 'Détecte les intrusions la nuit et prévient aussitôt.',
-  video: 'Des caméras dans les salles et autour du bâtiment, jour et nuit.',
-  portiques: 'Des détecteurs à l\'entrée : outils, bombes de peinture et objets dangereux restent dehors.',
-  salleForte: 'Une réserve blindée. Les œuvres qui y sont rangées n\'attirent presque plus les cambrioleurs.',
+  porte: 'Une porte blindée et des serrures renforcées. La première protection contre le vol.',
+  alarme: 'Détecte toute intrusion dans la salle et prévient aussitôt.',
+  cameras: 'Des caméras qui filment la salle jour et nuit.',
+  vitrines: 'Les œuvres passent sous verre : on ne peut plus les toucher ni les emporter.',
+  blindage: 'Une réserve blindée. Les œuvres qui y sont rangées n\'attirent presque plus les voleurs.',
+  norme1: 'La norme exigée pour accrocher des Chefs-d\'œuvre dans cette salle.',
+  norme2: 'La norme la plus haute, exigée pour accrocher des Trésors dans cette salle.',
+  portiques: 'Des détecteurs à l\'entrée du musée : outils, bombes de peinture et objets dangereux restent dehors.',
   chenil: 'Loge les chiens de garde. Ne protège rien seul : il faut des maîtres-chiens.',
-  vitrines: 'Les œuvres les plus exposées passent sous verre : on ne peut plus les toucher ni les emporter.',
   pcSecurite: 'Une salle de contrôle qui réunit alarmes, caméras et rondes.',
-  securite1: 'La norme exigée pour exposer tes propres Chefs-d\'œuvre.',
-  drones: 'Survolent le musée la nuit et repèrent les intrus de loin.',
-  securite2: 'La norme la plus haute, exigée pour exposer tes Trésors.',
+  drones: 'Survolent le musée et repèrent les intrus de loin.',
 };
 
 const MENACE = {
-  nuit: {
-    texte: 'La nuit, des voleurs s\'introduisent dans le musée. Ils visent ce qui a le plus de valeur, où qu\'il soit : salles, collection privée, réserve, atelier.',
-    suite: 'Une œuvre volée, et la réputation baisse. La police enquête pendant 26 semaines.',
-  },
-  jour: {
-    texte: 'Pendant les visites, quelqu\'un glisse une œuvre exposée sous son manteau. Plus les salles sont bondées, plus c\'est facile ; estampes et photographies partent le plus vite.',
-    suite: 'Une œuvre exposée volée, et la réputation baisse.',
+  vol: {
+    texte: 'Un voleur s\'en prend à une salle, à n\'importe quelle heure : la nuit par effraction, le jour sous un manteau. Il vise ce qui a le plus de valeur ; une salle bondée l\'aide, et estampes et photographies partent le plus vite.',
+    suite: 'Une œuvre volée, et la réputation baisse. L\'assurance en rembourse une part, la police enquête 26 semaines.',
   },
   vandalisme: {
     texte: 'Un visiteur s\'en prend à une œuvre exposée. Les plus célèbres attirent les vandales ; une œuvre modeste ne risque presque rien.',
-    suite: 'L\'œuvre perd 15 à 40 points de restauration et retourne en réserve.',
+    suite: 'L\'œuvre est abîmée et décrochée : elle part en réparation à l\'atelier.',
   },
 };
+
+const NOMS_MENACES = { vol: 'vol', vandalisme: 'vandalisme' };
 
 /* ---------- Mesures ---------- */
 
@@ -73,8 +73,7 @@ const decimale = (x) => x.toLocaleString('fr-FR', { maximumFractionDigits: x < 1
 
 // Ce que l'on compare avant et après. `mieux` : +1 si plus est mieux.
 const INDICATEURS = [
-  { id: 'nuit', nom: 'Cambriolage', format: (v) => `${pct(v)} / sem.`, mieux: -1 },
-  { id: 'jour', nom: 'Vol en salle', format: (v) => `${pct(v)} / sem.`, mieux: -1 },
+  { id: 'vol', nom: 'Vol', format: (v) => `${pct(v)} / sem.`, mieux: -1 },
   { id: 'vandalisme', nom: 'Vandalisme', format: (v) => `${pct(v)} / sem.`, mieux: -1 },
   { id: 'salles', nom: 'Salles ouvertes', format: (v) => nombre(v), mieux: 1 },
   { id: 'visiteurs', nom: 'Visiteurs par jour', format: (v) => nombre(v), mieux: 1 },
@@ -85,10 +84,9 @@ const INDICATEURS = [
 
 /** Les indicateurs d'un état, calculés par les moteurs du jeu. */
 function mesurer(cfg, etat, jour) {
-  const p = probabilites(cfg, etat, jour);
   const v = visiteursDuJour(cfg, etat, jour);
   return {
-    ...p,
+    ...risqueMusee(cfg, etat, jour),
     salles: espacesOuverts(cfg, etat, jour).ouverts.size,
     visiteurs: v,
     satisfaction: satisfaction(cfg, etat, v),
@@ -117,11 +115,21 @@ const retrait = (id) => (etat) => { etat.investissements = (etat.investissements
 function aNiveau(cfg, p, niveau) {
   return (etat) => {
     etat.personnel.employes = etat.personnel.employes.filter((e) => e.id !== p.id);
-    etat.personnel.employes.push({
+    const x = {
       id: p.id || '__essai', nom: p.nom, role: p.role, minutes: minutesPourNiveau(cfg, niveau), efficacite: p.efficacite, salaire: p.salaire,
-    });
+    };
+    // Un agent de sécurité prend son poste à l'embauche, comme dans le jeu.
+    if (role(cfg, p.role)?.menaces) x.affectation = p.affectation || affectationParDefaut(cfg, etat, x);
+    etat.personnel.employes.push(x);
   };
 }
+
+const installe = (lieu, id) => (etat) => {
+  etat.securite.salles = { ...(etat.securite.salles || {}), [lieu]: [...materielDe(etat, lieu), id] };
+};
+const desinstalle = (lieu, id) => (etat) => {
+  etat.securite.salles = { ...(etat.securite.salles || {}), [lieu]: materielDe(etat, lieu).filter((x) => x !== id) };
+};
 
 // « 1,4 % / sem. » → « 1,4 % », puis sans unité pour le côté gauche.
 const sansSemaine = (t) => t.replace(/ \/ sem\.$/, '');
@@ -223,9 +231,11 @@ function lignesProfil(p) {
 
 /** Ce qu'apporte chaque niveau, en clair, pour la fiche d'un métier. */
 function parNiveau(cfg, r) {
-  const noms = { nuit: 'cambriolage', jour: 'vol en salle', vandalisme: 'vandalisme' };
   const l = [];
-  if (r.menaces) l.push(`Protège contre : ${Object.keys(r.menaces).map((m) => noms[m]).join(', ')}, un peu plus à chaque niveau`);
+  if (r.menaces) {
+    l.push(`Protège contre : ${Object.keys(r.menaces).map((m) => NOMS_MENACES[m]).join(', ')}, un peu plus à chaque niveau`);
+    l.push('Couvre une à trois salles ; sa protection s\'y partage');
+  }
   if (r.unique) l.push('Un seul compte : le meilleur de l\'équipe');
   if (r.id === 'gardien') l.push('Un gardien par salle ouverte');
   return l;
@@ -286,6 +296,7 @@ export function fichePersonne(app, p, { candidat = false } = {}) {
         h('div.tres-discret', `Niveau ${niveau}${candidat ? '' : ` · ${Math.floor(p.minutes / 60)} h de sessions`}`))),
       h('p.fiche-texte', ROLES[p.role] || ''),
       bloc('Profil', lignesProfil(p)),
+      !candidat && r?.menaces ? blocAffectation(app, p, () => f) : null,
       bloc(candidat ? 'Si tu l\'embauches' : 'Son apport, sans → avec',
         lignesEcarts(apport),
         effetsPropres(cfg, p.role, niveau, efficacite(p)).map(ligne),
@@ -303,6 +314,32 @@ export function fichePersonne(app, p, { candidat = false } = {}) {
   return f;
 }
 
+/**
+ * Les salles qu'un agent couvre : un appui en ajoute ou en retire une, trois
+ * au plus. Chaque salle montre son risque de vol de la semaine.
+ */
+function blocAffectation(app, p, feuilleCourante) {
+  const { jeu } = app;
+  const cfg = jeu.cfg;
+  const e = jeu.etat;
+  const p7 = probabilites(cfg, e, jeu.jour());
+  const choisies = new Set(affectation(p));
+  const max = cfg.securite.sallesParAgent;
+  return bloc(`Salles couvertes · ${choisies.size} / ${max}`,
+    h('div.affectations', lieuxSecurises(cfg, e).map((l) => {
+      const dedans = choisies.has(l.id);
+      return h('button.puce', {
+        type: 'button', classe: dedans ? 'actif' : '', disabled: !dedans && choisies.size >= max,
+        onclick: async () => {
+          const lieux = dedans ? [...choisies].filter((x) => x !== l.id) : [...choisies, l.id];
+          feuilleCourante()?.fermer();
+          const ok = await app.agir('affecter', { employe: p.id, lieux });
+          if (ok) fichePersonne(app, app.jeu.etat.personnel.employes.find((x) => x.id === p.id) || p);
+        },
+      }, l.nom, h('small', pct(semaine(p7[l.id]?.vol || 0))));
+    })));
+}
+
 /** Fiche d'un métier : ce qu'il fait, ce qu'il faut pour l'ouvrir, son salaire. */
 export function ficheMetier(app, r) {
   const { jeu } = app;
@@ -311,7 +348,7 @@ export function ficheMetier(app, r) {
   const refus = refusRole(cfg, e, r);
   const membres = avecNiveaux(cfg, e).filter((x) => x.role === r.id);
   const candidats = (e.personnel?.candidats || []).filter((c) => c.role === r.id && c.expire > jeu.jour());
-  const mat = r.equipement ? cfg.investissements.find((i) => i.id === r.equipement) : null;
+  const mat = r.equipement ? (cfg.investissements.find((i) => i.id === r.equipement) || cfg.materielSalle.find((m) => m.id === r.equipement)) : null;
   feuille({
     titre: r.nom,
     contenu: h('div.fiche',
@@ -319,7 +356,7 @@ export function ficheMetier(app, r) {
       bloc('Ce qu\'apporte un employé de niveau 1', effetsPropres(cfg, r.id, 1).map(ligne), parNiveau(cfg, r).map(ligne)),
       bloc('Pour l\'ouvrir',
         r.statutMin ? ligne(`Statut ${cfg.statuts[r.statutMin].nom}${r.statutMin <= e.statut ? ' : atteint' : ''}`) : null,
-        mat ? ligne(`Matériel : ${mat.nom}${(e.investissements || []).includes(mat.id) ? ' : acquis' : ` (${nombre(mat.prix)} ✦)`}`) : null,
+        mat ? ligne(`Matériel : ${mat.nom}${refus ? '' : ' : acquis'}`) : null,
         !r.statutMin && !mat ? ligne('Ouvert dès le départ') : null),
       bloc('Salaire', ligne(`${decimale(salaireHoraire(cfg, e, { role: r.id, niveau: 1 }))} ✦ par heure de session au niveau 1, ${decimale(salaireHoraire(cfg, e, { role: r.id, niveau: cfg.personnel.niveauMax }))} ✦ au niveau ${cfg.personnel.niveauMax}`)),
       bloc('Ici',
@@ -335,7 +372,7 @@ export function ficheMateriel(app, x) {
   const e = jeu.etat;
   const id = x.id.replace(/^inv:/, '');
   const f0 = x.effets || {};
-  const noms = { nuit: 'cambriolage', jour: 'vol en salle', vandalisme: 'vandalisme' };
+  const noms = NOMS_MENACES;
   const apport = x.acquis
     ? ecarts(app, retrait(id)).map(inverse)
     : ecarts(app, achat(id));
@@ -351,9 +388,7 @@ export function ficheMateriel(app, x) {
         !apport.length ? ligne(metier && !MENACES.some((m) => f0[m]) ? 'Ne protège rien seul' : 'Aucun effet mesurable aujourd\'hui') : null),
       bloc('Ce qu\'il fait',
         MENACES.some((m) => f0[m]) ? ligne(`Protège contre : ${MENACES.filter((m) => f0[m]).map((m) => noms[m]).join(', ')}`) : null,
-        f0.salleForte ? ligne('Réserve trois fois moins visée la nuit') : null,
-        f0.securite === 1 ? ligne('Tes Chefs-d\'œuvre deviennent exposables') : null,
-        f0.securite === 2 ? ligne('Tes Trésors deviennent exposables') : null,
+        MENACES.some((m) => f0[m]) ? ligne('Pour tout le musée') : null,
         f0.electronique ? ligne('Électronique : plus efficace avec un technicien de sécurité') : null,
         servant ? ligne(f0.sans ? `${Math.round(f0.sans * 100)} % de sa protection sans ${servant.nom.toLowerCase()}` : `Inutile sans ${servant.nom.toLowerCase()}`) : null,
         metier ? h('button.fiche-lien', { type: 'button', onclick: () => { f.fermer(); ficheMetier(app, metier); } }, `Ouvre le métier : ${metier.nom}`, icone('droite')) : null),
@@ -386,85 +421,106 @@ export function niveauRisque(p) {
   return { mot: 'Élevé', couleur: 'var(--rouge)' };
 }
 
-/** Les œuvres que la menace vise le plus, avec leur part du risque. */
-function cibles(app, m) {
+/** Risque d'un espace sur la semaine : vol ou vandalisme. */
+export function risqueSalle(p7, lieu) {
+  const x = p7[lieu] || { vol: 0, vandalisme: 0 };
+  return 1 - ((1 - x.vol) * (1 - x.vandalisme)) ** 7;
+}
+
+/** Les œuvres d'un espace que la menace vise le plus, avec leur part du risque. */
+function cibles(app, m, lieu) {
   const { jeu } = app;
   const cfg = jeu.cfg;
   const e = jeu.etat;
   const s = cfg.securite;
-  const exposee = (o) => o.lieu === 'espace' || o.lieu === 'exposition';
-  const poids = (o) => {
-    if (m === 'nuit') {
-      if (o.lieu === 'reserve') return (e.investissements || []).includes('salleForte') ? s.poids.reserveForte : s.poids.reserve;
-      return s.poids[o.lieu] ?? 0;
-    }
-    if (!exposee(o)) return 0;
-    return m === 'jour' ? (s.portabilite[o.support] ?? 1) : prestige(cfg, o.niveau) ** (s.menaces.vandalisme.exposant - 1);
-  };
-  const liste = Object.values(e.oeuvres).map((o) => [o, prestige(cfg, o.niveau) * poids(o)]).filter(([, w]) => w > 0);
+  const ici = (o) => (o.lieu === 'espace' ? o.espace : o.lieu) === lieu;
+  const poids = (o) => (m === 'vol' ? prestige(cfg, o.niveau) * (s.portabilite[o.support] ?? 1)
+    : prestige(cfg, o.niveau) ** s.menaces.vandalisme.exposant);
+  const liste = Object.values(e.oeuvres).filter(ici).map((o) => [o, poids(o)]).filter(([, w]) => w > 0);
   const total = liste.reduce((t, [, w]) => t + w, 0);
   return liste.sort((a, b) => b[1] - a[1]).slice(0, 3).map(([o, w]) => ({ o, part: w / total }));
 }
 
-/** Fiche d'une menace : ce qu'elle fait, ce qui l'attire, ce qui protège, quoi ajouter. */
+/** Fiche d'une menace pour tout le musée : ce qu'elle fait, et les salles les plus exposées. */
 export function ficheMenace(app, m) {
   const { jeu } = app;
   const cfg = jeu.cfg;
   const e = jeu.etat;
   const jour = jeu.jour();
-  const p = probabilites(cfg, e, jour)[m];
-  const n = niveauRisque(p);
-  const nom = cfg.securite.menaces[m].nom;
-  const sans = (modifier) => {
-    const copie = structuredClone(e);
-    modifier(copie);
-    return probabilites(cfg, copie, jour)[m];
-  };
-
-  // Ce qui protège déjà : chaque source, et le risque si elle disparaissait.
-  const sources = [];
-  for (const x of avecNiveaux(cfg, e)) {
-    const q = sans(depart(x.id));
-    if (q - p > 1e-5) sources.push({ nom: `${x.nom} · ${role(cfg, x.role)?.nom.toLowerCase()}`, q });
-  }
-  for (const id of e.investissements || []) {
-    const inv = cfg.investissements.find((i) => i.id === id);
-    if (inv?.categorie !== 'securite') continue;
-    const q = sans(retrait(id));
-    if (q - p > 1e-5) sources.push({ nom: inv.nom, q });
-  }
-  sources.sort((a, b) => b.q - a.q);
-
-  // Ce que l'on peut ajouter : matériel disponible et candidats de la semaine.
-  const apres = (modifier) => { const copie = structuredClone(e); modifier(copie); return probabilites(cfg, copie, jour)[m]; };
-  const pistes = [];
-  for (const x of catalogueInvestissements(cfg, e).filter((y) => y.categorie === 'securite' && !y.acquis && !y.refus)) {
-    const q = apres(achat(x.id.replace(/^inv:/, '')));
-    if (p - q > 1e-5) pistes.push({ nom: x.nom, detail: `${nombre(x.prix)} ✦`, q, ouvrir: () => ficheMateriel(app, x) });
-  }
-  for (const c of (e.personnel?.candidats || []).filter((y) => y.expire > jour)) {
-    const q = apres(modifs.embauche(cfg, c));
-    if (p - q > 1e-5) pistes.push({ nom: c.nom, detail: `${role(cfg, c.role)?.nom} · niv. ${c.niveau}`, q, ouvrir: () => fichePersonne(app, c, { candidat: true }) });
-  }
-  pistes.sort((a, b) => a.q - b.q);
-
+  const total = risqueMusee(cfg, e, jour)[m];
+  const n = niveauRisque(total);
+  const p7 = probabilites(cfg, e, jour);
+  const salles = lieuxSecurises(cfg, e).map((l) => ({ l, q: semaine(p7[l.id]?.[m] || 0) })).filter((x) => x.q > 0).sort((a, b) => b.q - a.q);
   let f = null;
-  const lien = (x, valeur) => h('button.fiche-lien', { type: 'button', onclick: () => { f.fermer(); x.ouvrir(); } },
-    h('span', h('b', x.nom), h('small', x.detail)), h('span.nombre', valeur), icone('droite'));
-  const r = risques(cfg, e, jour)[m];
-
   f = feuille({
-    titre: nom,
+    titre: cfg.securite.menaces[m].nom,
     contenu: h('div.fiche',
-      h('div.fiche-risque', h('b', { style: { color: n.couleur } }, pct(p)), h('span', `par semaine · ${n.mot.toLowerCase()}`)),
+      h('div.fiche-risque', h('b', { style: { color: n.couleur } }, pct(total)), h('span', `par semaine pour tout le musée · ${n.mot.toLowerCase()}`)),
       h('p.fiche-texte', MENACE[m].texte),
-      bloc('Si ça arrive', ligne(MENACE[m].suite), ligne('Tirage chaque dimanche à 4 h')),
-      bloc('Ce qui l\'attire',
-        r > 0 ? cibles(app, m).map(({ o, part }) => h('div.fiche-ecart', h('span', cartel(app, o, null).titre), h('span.nombre', `${Math.round(part * 100)} %`))) : ligne('Rien à voler ici pour l\'instant')),
-      bloc('Ce qui te protège, et le risque sans',
-        sources.length ? sources.map((x) => h('div.fiche-ecart', h('span', x.nom), h('span.nombre', pct(x.q)))) : ligne('Rien')),
-      bloc('Pour le réduire',
-        pistes.length ? pistes.slice(0, 5).map((x) => lien(x, `→ ${pct(x.q)}`)) : ligne('Rien de disponible cette semaine'))),
+      bloc('Si ça arrive', ligne(MENACE[m].suite), ligne('Un tirage par salle, chaque jour')),
+      bloc('Les salles les plus exposées',
+        salles.length ? salles.slice(0, 6).map(({ l, q }) => h('button.fiche-lien', { type: 'button', onclick: () => { f.fermer(); ficheSalle(app, l.id); } },
+          h('span', h('b', l.nom)), h('span.nombre', { style: { color: niveauRisque(q).couleur } }, pct(q)), icone('droite')))
+          : ligne('Rien à voler ici pour l\'instant'))),
   });
 }
 
+/**
+ * Fiche d'un espace : son risque, ce qui l'attire, ce qui le protège, le
+ * matériel qu'on peut y installer (avec son effet avant → après) et les
+ * agents qui le couvrent.
+ */
+export function ficheSalle(app, lieu) {
+  const { jeu } = app;
+  const cfg = jeu.cfg;
+  const e = jeu.etat;
+  const jour = jeu.jour();
+  const l = lieuxSecurises(cfg, e).find((x) => x.id === lieu);
+  if (!l) return;
+  const p7 = probabilites(cfg, e, jour);
+  const q = risqueSalle(p7, lieu);
+  const n = niveauRisque(q);
+  const risqueApres = (modifier) => { const c = structuredClone(e); modifier(c); return risqueSalle(probabilites(cfg, c, jour), lieu); };
+  const agents = avecNiveaux(cfg, e).filter((x) => affectation(x).includes(lieu));
+  const installes = materielDe(e, lieu);
+  const possibles = cfg.materielSalle.filter((m) => materielPossible(m, l.type) && !installes.includes(m.id));
+  let f = null;
+  const ligneMateriel = (m) => {
+    const prix = prixMateriel(m, l);
+    const refus = m.statutMin && e.statut < m.statutMin ? `Statut ${cfg.statuts[m.statutMin].nom}`
+      : m.prerequis && !installes.includes(m.prerequis) ? `D'abord : ${cfg.materielSalle.find((x) => x.id === m.prerequis)?.nom}` : null;
+    const apres = refus ? null : risqueApres(installe(lieu, m.id));
+    return h('div.materiel-ligne',
+      h('div', h('b', m.nom), h('small', refus || [apres !== null && apres < q - 1e-6 ? `→ ${pct(apres)} / sem.` : null, m.norme ? (m.norme === 1 ? 'Chefs-d\'œuvre accrochables' : 'Trésors accrochables') : null, m.blindage ? 'Réserve presque plus visée' : null].filter(Boolean).join(' · ') || MATERIEL[m.id])),
+      h('button.bouton.petit.or', {
+        type: 'button', disabled: !!refus || (app.solde !== null && app.solde < prix),
+        onclick: async () => {
+          if (!(await confirmer(`${m.nom} · ${l.nom}`, { texte: `${nombre(prix)} ✦`, oui: 'Installer' }))) return;
+          f.fermer();
+          const ok = await app.agir('installer', { lieu, materiel: m.id }, { succes: m.nom });
+          if (ok) ficheSalle(app, lieu);
+        },
+      }, `${nombre(prix)} ✦`));
+  };
+  f = feuille({
+    titre: l.nom,
+    contenu: h('div.fiche',
+      h('div.fiche-risque', h('b', { style: { color: n.couleur } }, pct(q)), h('span', `de vol ou de vandalisme par semaine · ${n.mot.toLowerCase()}`)),
+      bloc('Ce qui attire',
+        MENACES.flatMap((m) => cibles(app, m, lieu).map(({ o, part }) => h('div.fiche-ecart', h('span', `${cartel(app, o, null).titre}`), h('span.nombre', `${NOMS_MENACES[m]} ${Math.round(part * 100)} %`))))
+          .slice(0, 4),
+        risques(cfg, e, jour)[lieu]?.vol ? null : ligne('Rien à voler ici pour l\'instant')),
+      bloc('Ce qui protège',
+        installes.map((id) => {
+          const m = cfg.materielSalle.find((x) => x.id === id);
+          const sans = risqueApres(desinstalle(lieu, id));
+          return h('div.fiche-ecart', h('span', m?.nom || id), h('span.nombre', `sans : ${pct(sans)}`));
+        }),
+        agents.map((x) => {
+          const sans = risqueApres((c) => { const y = c.personnel.employes.find((z) => z.id === x.id); y.affectation = affectation(y).filter((id) => id !== lieu); });
+          return h('div.fiche-ecart', h('span', `${x.nom} · ${role(cfg, x.role)?.nom.toLowerCase()}${affectation(x).length > 1 ? ` (${affectation(x).length} salles)` : ''}`), h('span.nombre', `sans : ${pct(sans)}`));
+        }),
+        !installes.length && !agents.length ? ligne('Rien : ni matériel, ni agent') : null),
+      bloc('Installer', possibles.length ? possibles.map(ligneMateriel) : ligne('Tout est installé'))),
+  });
+}

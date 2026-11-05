@@ -9,6 +9,8 @@ import { espacesOuverts } from '../../moteur/visiteurs.js';
 import { estConforme, valeurTheme, niveau, niveauMaitrise } from '../../moteur/regles.js';
 import { etape } from '../../rendu/restauration.js';
 import { choisirDuree } from './atelier.js';
+import { probabilites } from '../../moteur/securite.js';
+import { ficheSalle, risqueSalle, niveauRisque } from '../fiches.js';
 
 export async function afficher(app, vue) {
   const { jeu } = app;
@@ -35,19 +37,20 @@ function plan(app, e, cfg, fiches, jour, ouverture) {
   const racine = h('div');
   const espaces = espacesPublics(e);
   const largeurMax = Math.min(680, window.innerWidth || 390) - 70;
+  const p7 = probabilites(cfg, e, jour);
   let rang = 0;
   const murs = [];
   for (let a = 1; a <= e.batiment.ailes; a++) {
     const salles = espaces.filter((s) => s.type === 'salle' && s.aile === a);
     if (e.batiment.ailes > 1) murs.push(h('div.aile-titre', `Aile ${a}`));
     if (salles.length) {
-      for (const s of salles) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax));
+      for (const s of salles) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax, p7));
     } else {
       murs.push(h('section.mur', { style: { '--mur': couleurMur(null, rang++) } },
         h('div.mur-vide', h('a.bouton.or.petit', { href: '#/investir' }, icone('ajouter'), 'Nouvelle salle'))));
     }
   }
-  for (const s of espaces.filter((x) => x.type !== 'salle')) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax));
+  for (const s of espaces.filter((x) => x.type !== 'salle')) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax, p7));
   // Les chantiers : un mur sous échafaudage, qui avance pendant les sessions.
   for (const c of e.chantiers || []) {
     murs.push(h('section.mur.travaux',
@@ -71,7 +74,8 @@ function plan(app, e, cfg, fiches, jour, ouverture) {
   return racine;
 }
 
-function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax) {
+function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax, p7) {
+  const risque = risqueSalle(p7, s.id);
   const contenu = contenuEspace(e, s.id);
   const theme = s.theme;
   const conformes = contenu.filter((id) => id !== null && estConforme(e.oeuvres[id], theme)).length;
@@ -101,6 +105,9 @@ function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax) {
         s.nom || cfg.espaces[s.type]?.nom || s.id,
         h('small', [theme ? theme.libelle : 'Sans thème', theme && garnies ? `${conformes}/${garnies}` : null].filter(Boolean).join(' · '))),
       h('span.puce', `${garnies}/${s.places}`),
+      // Le risque de la semaine dans cette salle : un appui ouvre sa sécurité.
+      garnies ? h('button.puce', { type: 'button', style: { color: niveauRisque(risque).couleur === 'var(--vert)' ? null : 'var(--laiton-clair)' }, onclick: () => ficheSalle(app, s.id) },
+        icone('securite'), `${(risque * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`) : null,
       fermee ? h('a.puce.alerte', { href: '#/personnel' }, 'Fermée') : null));
 }
 
