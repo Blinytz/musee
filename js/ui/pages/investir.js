@@ -4,6 +4,8 @@ import { h, nombre, dateJour, ajouter, icone } from '../dom.js';
 import { confirmer } from '../composants.js';
 import { catalogueInvestissements, etatCampagne, coutCampagne } from '../../moteur/actions.js';
 import { prixAgrandissement, espacesPublics } from '../../moteur/batiment.js';
+import { heuresChantier } from '../../moteur/charges.js';
+import { jauge } from '../composants.js';
 
 const CATEGORIES = [
   ['batiment', 'Bâtiment'],
@@ -56,6 +58,21 @@ export async function afficher(app, vue) {
     h('div.rangee-boutons',
       h('a.bouton', { href: '#/personnel' }, icone('visiteurs'), 'Personnel'),
       h('a.bouton', { href: '#/securite' }, icone('privee'), 'Sécurité')));
+
+  // Chantiers en cours : ils avancent pendant les sessions, un à la fois.
+  if ((e.chantiers || []).length) {
+    ajouter(vue, h('h3', { style: { margin: '18px 2px 8px' } }, 'Chantiers'),
+      h('div.pile', e.chantiers.map((c, i) => h('div.carte.pile', { style: { gap: '8px' } },
+        h('div.ligne.espace', h('b', c.nom), h('span.tres-discret.nombre', `${nombre(Math.floor(c.fait))} / ${c.heures} h`)),
+        jauge(c.fait / c.heures),
+        i ? h('div.tres-discret', 'En attente') : null))));
+  }
+  // Heures de chantier d'un achat du bâtiment.
+  const chantier = (id) => {
+    const quoi = id === 'aile' ? 'aile' : id === 'salle' ? 'salle' : id.startsWith('agrandir:') ? 'agrandissement' : id.startsWith('espace:') ? 'espace' : null;
+    const h0 = quoi ? heuresChantier(cfg, quoi) : 0;
+    return h0 ? `${h0} h de chantier` : null;
+  };
   for (const [id, nom] of CATEGORIES) {
     const items = liste.filter((x) => x.categorie === id);
     if (id === 'batiment') {
@@ -68,7 +85,10 @@ export async function afficher(app, vue) {
       }
     }
     ajouter(vue, h('h3', { style: { margin: '18px 2px 8px' } }, nom),
-      h('div.pile', items.map((x) => ligne({ ...x, quoi: x.id }))));
+      h('div.pile', items.map((x) => ligne({
+        ...x, quoi: x.id,
+        sous: [x.sous || effetsTexte(cfg, x.effets), x.acquis ? null : chantier(x.id)].filter(Boolean).join(' · ') || null,
+      }))));
   }
 
   // Communication : une campagne à la fois, délai entre deux.

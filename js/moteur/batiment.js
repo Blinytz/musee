@@ -7,12 +7,16 @@ import { effets } from './regles.js';
 
 export const LIEUX = ['reserve', 'atelier', 'espace', 'privee', 'pret', 'exposition'];
 
-/** Espaces où l'on accroche en permanence : salles, cabinet, jardin. */
+/**
+ * Espaces où l'on accroche en permanence : salles, cabinet, jardin. Une
+ * salle encore en chantier n'en fait pas partie.
+ */
 export function espacesPublics(etat) {
   const b = etat.batiment;
-  const liste = b.salles.map((s) => ({ ...s, type: 'salle' }));
+  const liste = b.salles.filter((s) => !s.chantier).map((s) => ({ ...s, type: 'salle' }));
   if (b.cabinet) liste.push({ ...b.cabinet, id: 'cabinet', type: 'cabinet' });
   if (b.jardin) liste.push({ ...b.jardin, id: 'jardin', type: 'jardin' });
+  // Une salle encore en chantier n'accueille personne.
   return liste;
 }
 
@@ -105,14 +109,32 @@ export function prixSalle(cfg, etat) {
   return Math.round(s.prix * s.facteur ** etat.batiment.sallesAchetees);
 }
 
-/** Prix du prochain agrandissement d'un espace, ou null au maximum. */
+/** Prix du prochain agrandissement d'un espace, ou null au maximum (ou en chantier). */
 export function prixAgrandissement(cfg, etat, espaceId) {
   const e = espace(etat, espaceId);
   if (!e || e.type === 'jardin') return null;
+  if ((etat.chantiers || []).some((c) => c.quoi === 'agrandissement' && c.cible === espaceId)) return null;
   const a = cfg.batiment.agrandissement;
   const k = e.agrandissements || 0;
   if (k >= a.prix.length || e.places >= a.max) return null;
   return a.prix[k];
+}
+
+/**
+ * Entretien du bâtiment, par heure de session : chaque espace public et
+ * chaque aile, revalorisés avec le statut. Une salle vide coûte aussi.
+ */
+export function entretienHoraire(cfg, etat) {
+  const c = cfg.charges?.entretien;
+  if (!c) return 0;
+  const espaces = espacesPublics(etat).length + (etat.batiment.exposition ? 1 : 0);
+  const g = c.grille[etat.statut] ?? c.grille[c.grille.length - 1];
+  return (espaces * c.espace + etat.batiment.ailes * c.aile) * g;
+}
+
+/** Ailes en construction : leurs futures salles ne sont pas encore achetables. */
+export function chantiersEnCours(etat) {
+  return etat.chantiers || [];
 }
 
 export function prixReserve(cfg, etat) {

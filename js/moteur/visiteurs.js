@@ -87,9 +87,12 @@ export function apports(cfg, etat, jour) {
 
 /** Multiplicateur global appliqué à la somme des apports. */
 export function multiplicateurGlobal(cfg, etat, jour) {
+  // Un chantier en cours gêne la visite.
+  const travaux = (etat.chantiers || []).length ? (cfg.chantiers?.malus ?? 1) : 1;
   return facteurReputation(cfg, etat.reputation)
     * facteurPrix(cfg, etat.prixBillet, etat.reputation)
-    * effetCampagnes(cfg, etat, jour);
+    * effetCampagnes(cfg, etat, jour)
+    * travaux;
 }
 
 /** Visiteurs attendus le jour `jour` avec l'état tel qu'il est. */
@@ -109,10 +112,16 @@ export function detailVisiteurs(cfg, etat, jour) {
   };
 }
 
-/** Taux horaire figé au lancement d'une session : Éclats par heure. */
+/** Recettes par heure de session, figées au lancement : le billet en entier. */
 export function tauxHoraire(cfg, etat, jour) {
   const v = visiteursDuJour(cfg, etat, jour);
-  return v * etat.prixBillet * cfg.statuts[etat.statut].part * effets(cfg, etat).revenus;
+  return v * etat.prixBillet * effets(cfg, etat).revenus;
+}
+
+/** Coût d'un visiteur selon le statut (ménage, énergie, billetterie). */
+export function coutVisiteur(cfg, etat) {
+  const a = cfg.charges?.accueil || [0];
+  return a[etat.statut] ?? a[a.length - 1];
 }
 
 /** Part des espaces thématiques cohérents parmi les espaces garnis. */

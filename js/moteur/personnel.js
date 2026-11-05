@@ -4,6 +4,7 @@
 
 import { generateur, choixPondere, entier } from './alea.js';
 import { PRENOMS, NOMS } from './noms.js';
+import { entretienHoraire } from './batiment.js';
 
 export function role(cfg, id) {
   return cfg.personnel.roles.find((r) => r.id === id) || null;
@@ -212,7 +213,7 @@ export function tirerCandidats(cfg, etat, jour) {
  */
 export function arrieresBloquants(cfg, etat) {
   const a = etat.personnel?.arrieres || 0;
-  return a > 0 && a > masseSalariale(cfg, etat) * (cfg.personnel.arrieresToleresHeures ?? 0);
+  return a > 0 && a > (masseSalariale(cfg, etat) + entretienHoraire(cfg, etat)) * (cfg.personnel.arrieresToleresHeures ?? 0);
 }
 
 /** Frais de recrutement : quelques heures du salaire actuel. */

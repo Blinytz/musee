@@ -21,6 +21,7 @@ import { copie, evenement } from './etat.js';
 import { peutEmprunter, seuilEmprunt } from './securite.js';
 import { bonusReputation } from './journee.js';
 import { entrerDansLePublic, sortirDuPublic } from './lieux.js';
+import { chargesHoraires, ouvrirChantier, avancerChantiers } from './charges.js';
 
 export class ErreurJeu extends Error {
   constructor(message, code) {
@@ -194,8 +195,13 @@ export function catalogueInvestissements(cfg, etat) {
   const liste = [];
   const ajouter = (x) => liste.push(x);
 
+  const chantiers = etat.chantiers || [];
+  const enChantier = (quoi, cible) => chantiers.some((c) => c.quoi === quoi && (cible === undefined || c.cible === cible));
   const pa = prixAile(cfg, etat);
-  ajouter({ id: 'aile', categorie: 'batiment', nom: `Aile ${b.ailes + 1}`, prix: pa, refus: pa === null ? 'Maximum atteint' : null });
+  ajouter({
+    id: 'aile', categorie: 'batiment', nom: `Aile ${b.ailes + 1}`, prix: pa,
+    refus: pa === null ? 'Maximum atteint' : (enChantier('aile') ? 'En chantier' : null),
+  });
   const ps = prixSalle(cfg, etat);
   ajouter({ id: 'salle', categorie: 'batiment', nom: 'Salle', prix: ps, refus: aileDisponible(cfg, etat) ? null : 'Toutes les ailes sont pleines' });
   ajouter({ id: 'reserve', categorie: 'batiment', nom: `Réserve +${cfg.batiment.reserve.places}`, prix: prixReserve(cfg, etat), refus: null });
@@ -205,6 +211,7 @@ export function catalogueInvestissements(cfg, etat) {
     const e = cfg.espaces[type];
     let refus = null;
     if (b[type]) refus = 'Acquis';
+    else if (enChantier('espace', type)) refus = 'En chantier';
     else if (etat.statut < e.statutMin) refus = cfg.statuts[e.statutMin].nom;
     ajouter({ id: `espace:${type}`, categorie: 'espaces', nom: e.nom, prix: e.prix, refus, acquis: !!b[type] });
   }
@@ -232,9 +239,11 @@ export function investir(cfg, etat0, { quoi }, jour = etat0.jourFerme + 1) {
   if (quoi === 'aile') {
     prix = prixAile(cfg, etat);
     if (prix === null) refuser('Maximum d\'ailes atteint');
-    b.ailes += 1;
-    cle = `musee:aile:${b.ailes}`;
-    motif = `Aile ${b.ailes}`;
+    if ((etat.chantiers || []).some((c) => c.quoi === 'aile')) refuser('Une aile est déjà en chantier');
+    const n = b.ailes + 1;
+    ouvrirChantier(cfg, etat, { id: `aile${n}`, quoi: 'aile', cible: n, nom: `Aile ${n}` }, jour);
+    cle = `musee:aile:${n}`;
+    motif = `Aile ${n}`;
   } else if (quoi === 'salle') {
     const aile = aileDisponible(cfg, etat);
     if (!aile) refuser('Toutes les ailes sont pleines');
@@ -243,7 +252,10 @@ export function investir(cfg, etat0, { quoi }, jour = etat0.jourFerme + 1) {
     const n = b.salles.length + 1;
     let id = `s${n}`;
     while (b.salles.some((s) => s.id === id)) id = `s${Number(id.slice(1)) + 1}`;
-    b.salles.push({ id, nom: `Salle ${n}`, aile, places: cfg.batiment.salle.places, agrandissements: 0, theme: null });
+    b.salles.push({ id, nom: `Salle ${n}`, aile, places: cfg.batiment.salle.places, agrandissements: 0, theme: null, chantier: true });
+    if (!ouvrirChantier(cfg, etat, { id: `salle-${id}`, quoi: 'salle', cible: id, nom: `Salle ${n}` }, jour)) {
+      delete b.salles[b.salles.length - 1].chantier;
+    }
     cle = `musee:salle:${b.sallesAchetees}`;
     motif = `Salle ${n}`;
   } else if (quoi.startsWith('agrandir:')) {
@@ -252,7 +264,7 @@ export function investir(cfg, etat0, { quoi }, jour = etat0.jourFerme + 1) {
     if (prix === null) refuser('Agrandissement impossible');
     const e = id === 'cabinet' ? b.cabinet : b.salles.find((s) => s.id === id);
     e.agrandissements = (e.agrandissements || 0) + 1;
-    e.places = Math.min(cfg.batiment.agrandissement.max, e.places + cfg.batiment.agrandissement.places);
+    ouvrirChantier(cfg, etat, { id: `agrandir-${id}-${e.agrandissements}`, quoi: 'agrandissement', cible: id, nom: e.nom || id }, jour);
     cle = `musee:agrandir:${id}:${e.agrandissements}`;
     motif = `Agrandissement : ${e.nom || id}`;
   } else if (quoi === 'reserve') {
@@ -272,9 +284,10 @@ export function investir(cfg, etat0, { quoi }, jour = etat0.jourFerme + 1) {
     const e = cfg.espaces[type];
     if (!e || !e.prix) refuser('Espace inconnu');
     if (b[type]) refuser('Déjà acquis');
+    if ((etat.chantiers || []).some((c) => c.quoi === 'espace' && c.cible === type)) refuser('Déjà en chantier');
     if (etat.statut < e.statutMin) refuser(`Statut requis : ${cfg.statuts[e.statutMin].nom}`);
     prix = e.prix;
-    b[type] = { nom: e.nom, places: e.places, agrandissements: 0, theme: null };
+    ouvrirChantier(cfg, etat, { id: `espace-${type}`, quoi: 'espace', cible: type, nom: e.nom }, jour);
     cle = `musee:espace:${type}`;
     motif = e.nom;
   } else if (quoi.startsWith('inv:')) {
@@ -489,6 +502,7 @@ export function figerSession(cfg, etat, oeuvreId, jour) {
     bonus: bonusMaitrise(cfg, minutesSupport) + effets(cfg, etat).efficacite,
     tauxHoraire: tauxHoraire(cfg, etat, jour),
     salaireHoraire: masseSalariale(cfg, etat),
+    charges: chargesHoraires(cfg, etat, jour, o.niveau),
     abattement: ep.abattement,
     plafondAssistants: plafond,
     assistants,
@@ -516,7 +530,7 @@ export function demarrerSession(cfg, etat0, { id, oeuvre, dureeMin, debut }, jou
  * compté est borné à la durée prévue ; sous le seuil, rien ne compte.
  * `arrieres` : salaires restés dus des sessions précédentes.
  */
-export function resultatSession(cfg, session, finMs, { arrieres = 0 } = {}) {
+export function resultatSession(cfg, session, finMs, { arrieres = 0, indemnites = 0 } = {}) {
   const prevueMs = session.dureeMin * 60e3;
   const ecouleMs = Math.max(0, Math.min(prevueMs, finMs - session.debut));
   let minutes = Math.floor(ecouleMs / 60e3);
@@ -538,8 +552,10 @@ export function resultatSession(cfg, session, finMs, { arrieres = 0 } = {}) {
   const finances = bilanFinancier(cfg, {
     tauxHoraire: f.tauxHoraire,
     salaireHoraire: f.salaireHoraire || 0,
+    charges: f.charges || {},
     minutes,
     arrieres: minutes ? arrieres : 0,
+    indemnites,
     abattement: f.abattement || 0,
   });
   return {
@@ -562,7 +578,7 @@ export function terminerSession(cfg, etat0, finMs, jour) {
   const etat = copie(etat0);
   const s = etat.session;
   if (!s) refuser('Aucune session en cours');
-  const r = resultatSession(cfg, s, finMs, { arrieres: etat.personnel?.arrieres || 0 });
+  const r = resultatSession(cfg, s, finMs, { arrieres: etat.personnel?.arrieres || 0, indemnites: etat.indemnites || 0 });
   const o = etat.oeuvres[s.oeuvre];
   if (o) {
     o.progression = r.progressionApres;
@@ -590,16 +606,27 @@ export function terminerSession(cfg, etat0, finMs, jour) {
     }
     etat.personnel.arrieres = r.finances.arrieresRestants;
   }
+  // Les indemnités d'assurance en attente sont versées avec cette session ;
+  // ses heures font avancer les chantiers.
+  if (r.minutes) {
+    etat.indemnites = 0;
+    avancerChantiers(cfg, etat, r.minutes, jour);
+  }
 
   const entree = {
     id: s.id, debut: s.debut, fin: s.debut + r.minutes * 60e3, jour: s.jour,
     oeuvre: s.oeuvre, titre: o?.titre || '?', support: s.figes.support,
     minutes: r.minutes, travail: Math.round(r.travail), perdu: Math.round(r.perdu),
     avant: r.progressionAvant, apres: r.progressionApres, eclats: r.eclats,
-    recettes: Math.round(r.finances.recettes),
-    salaires: Math.round(r.finances.salaires + r.finances.arrieresPayes),
-    impot: Math.round(r.finances.impot),
-    arrieres: Math.round(r.finances.arrieresRestants),
+    recettes: r.finances.recettes,
+    indemnites: r.finances.indemnites || 0,
+    salaires: r.finances.salaires + r.finances.arrieresPayes,
+    accueil: r.finances.accueil || 0,
+    entretien: r.finances.entretien || 0,
+    assurance: r.finances.assurance || 0,
+    fournitures: r.finances.fournitures || 0,
+    impot: r.finances.impot,
+    arrieres: r.finances.arrieresRestants,
     assistants: r.assistants.map((a) => ({ nom: a.nom, oeuvre: a.oeuvre, avant: a.avant, apres: a.apres })),
     promotions: promotions.map((p) => ({ nom: p.nom, role: p.role, niveau: p.niveau })),
     verse: r.eclats === 0,

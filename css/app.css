@@ -282,6 +282,11 @@ input[type=range] { accent-color: var(--accent); }
 .place .hors-theme { position: absolute; right: -14px; top: -14px; width: 10px; height: 10px; border-radius: 50%; background: #ff8a6a; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); z-index: 1; }
 
 .mur-vide { display: grid; place-items: center; gap: 12px; padding: 26px 0 8px; }
+.mur.travaux {
+  background:
+    repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.18) 0 14px, transparent 14px 28px),
+    #6b5a44;
+}
 .bac-titre { display: flex; justify-content: space-between; align-items: baseline; padding: 0 18px; color: var(--creme-2); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; }
 .bac { display: flex; align-items: center; gap: 26px; overflow-x: auto; padding: 22px 26px 26px; scrollbar-width: none; min-height: 110px; }
 .bac.vide-bac { min-height: 0; padding: 10px 18px 18px; }

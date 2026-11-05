@@ -89,26 +89,37 @@ export function impotHoraire(cfg, beneficeHoraire) {
   return impot;
 }
 
+// Charges de fin de session autres que les salaires, dans l'ordre affiché.
+export const CHARGES = ['accueil', 'entretien', 'assurance', 'fournitures'];
+
 /**
- * Fin de session (docs/ECONOMIE.md, section 1) : recettes, puis salaires et
- * arriérés, puis impôt sur le bénéfice, puis net. Les taux sont horaires et
- * peuvent être fractionnaires (0,5 ✦/h) ; chaque montant, lui, est un nombre
- * entier d'Éclats, arrondi au plus proche, et le net est leur différence
- * exacte : recettes - salaires - arriérés - impôt.
+ * Fin de session (docs/ECONOMIE.md, section 1) : recettes (le billet en
+ * entier) et indemnités d'assurance, puis les charges en clair (salaires,
+ * accueil, entretien, assurance, fournitures) et les arriérés, puis l'impôt
+ * sur le bénéfice, puis le net. Les taux sont horaires et peuvent être
+ * fractionnaires (0,5 ✦/h) ; chaque montant est un nombre entier d'Éclats,
+ * arrondi au plus proche, et le net est leur différence exacte. Ce que les
+ * recettes ne couvrent pas devient des arriérés, jamais une dette.
  */
-export function bilanFinancier(cfg, { tauxHoraire, salaireHoraire, minutes, arrieres = 0, abattement = 0 }) {
+export function bilanFinancier(cfg, {
+  tauxHoraire, salaireHoraire, charges = {}, minutes, arrieres = 0, abattement = 0, indemnites = 0,
+}) {
   const heures = minutes / 60;
   const recettes = Math.round(recettesSession(tauxHoraire, minutes));
   const salaires = Math.round(Math.max(0, salaireHoraire) * heures);
+  const lignes = Object.fromEntries(CHARGES.map((k) => [k, Math.round(Math.max(0, charges[k] || 0) * heures)]));
+  const courant = salaires + CHARGES.reduce((t, k) => t + lignes[k], 0);
   // Un état ancien peut garder des arriérés fractionnaires.
   const anciens = Math.round(arrieres);
-  const du = salaires + anciens;
-  if (recettes < du) {
-    return { recettes, salaires, arrieresPayes: Math.max(0, recettes - salaires), arrieresRestants: du - recettes, benefice: 0, impot: 0, net: 0 };
+  const credits = recettes + (minutes ? Math.round(indemnites) : 0);
+  const du = courant + anciens;
+  const base = { recettes, indemnites: credits - recettes, salaires, ...lignes };
+  if (credits < du) {
+    return { ...base, arrieresPayes: Math.max(0, credits - courant), arrieresRestants: du - credits, benefice: 0, impot: 0, net: 0 };
   }
-  const benefice = recettes - du;
+  const benefice = credits - du;
   const impot = heures > 0 ? Math.min(benefice, Math.round(heures * impotHoraire(cfg, benefice / heures) * (1 - abattement))) : 0;
-  return { recettes, salaires, arrieresPayes: anciens, arrieresRestants: 0, benefice, impot, net: benefice - impot };
+  return { ...base, arrieresPayes: anciens, arrieresRestants: 0, benefice, impot, net: benefice - impot };
 }
 
 /* ---------- Visiteurs ---------- */
@@ -143,9 +154,11 @@ export function facteurReputation(cfg, reputation) {
 /* ---------- Arrivages ---------- */
 
 /** Prix d'arrivage d'un niveau, remises de documentation comprises. */
+/** Prix d'une œuvre d'arrivage : la cote du musée le relève, la documentation le remise. */
 export function prixArrivage(cfg, etat, n) {
   const remise = effets(cfg, etat).remise;
-  return Math.round(niveau(cfg, n).prix * (1 - remise));
+  const cote = cfg.cote?.[etat.statut] ?? 1;
+  return Math.round(niveau(cfg, n).prix * cote * (1 - remise));
 }
 
 /* ---------- Thèmes ---------- */

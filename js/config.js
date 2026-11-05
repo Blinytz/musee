@@ -104,14 +104,38 @@ export const CONFIG = {
     bonusPret: 1,
   },
 
+  // Charges de fin de session (docs/ECONOMIE.md, section 1). Le billet est
+  // encaissé en entier ; chaque dépense est retirée en clair, par heure de
+  // session, figée au lancement comme les recettes. Rien ne se paie hors
+  // session.
+  charges: {
+    // Coût d'un visiteur (ménage, énergie, billetterie), selon le statut.
+    accueil: [0.6, 0.65, 0.7, 0.72, 0.74, 0.76],
+    // Entretien : par espace public et par aile, × grille du statut.
+    entretien: { espace: 5, aile: 5, grille: [0.4, 2, 5, 15, 20, 20] },
+    // Assurance : part de la valeur exposée par heure, majorée selon le
+    // risque de la semaine ; un vol est remboursé à hauteur de `indemnite`.
+    assurance: { taux: 0.0012, risque: 10, indemnite: 0.5 },
+    // Fournitures par heure, selon le niveau de l'œuvre restaurée.
+    fournitures: [0, 2, 8, 30, 100, 300],
+  },
+
+  // La cote du musée : plus il est connu, plus les vendeurs demandent cher.
+  cote: [1, 1, 1, 1.3, 1.8, 2.5],
+
+  // Chantiers : un agrandissement payé sort de terre pendant les sessions,
+  // en heures de session ; tant qu'un chantier dure, le musée accueille
+  // `malus` de ses visiteurs.
+  chantiers: { heures: { salle: 4, aile: 10, agrandissement: 2, espace: 6 }, malus: 0.9 },
+
   // `niveauMax` : plus haut niveau d'œuvre proposé dans les arrivages.
   statuts: [
-    { id: 0, nom: 'Galerie de quartier', seuil: 0, part: 0.05, niveauMax: 1, ateliers: 1 },
-    { id: 1, nom: 'Musée municipal', seuil: 20000, part: 0.10, niveauMax: 2, ateliers: 2 },
-    { id: 2, nom: 'Musée régional', seuil: 150000, part: 0.15, niveauMax: 2, ateliers: 2, prets: true, arrivagesGraphiques: true },
-    { id: 3, nom: 'Musée national', seuil: 1000000, part: 0.25, niveauMax: 3, ateliers: 3, expositions: true },
-    { id: 4, nom: 'Musée international', seuil: 3000000, part: 0.35, niveauMax: 4, ateliers: 3 },
-    { id: 5, nom: 'Musée universel', seuil: 6000000, part: 0.50, niveauMax: 5, ateliers: 4 },
+    { id: 0, nom: 'Galerie de quartier', seuil: 0, niveauMax: 1, ateliers: 1 },
+    { id: 1, nom: 'Musée municipal', seuil: 20000, niveauMax: 2, ateliers: 2 },
+    { id: 2, nom: 'Musée régional', seuil: 150000, niveauMax: 2, ateliers: 2, prets: true, arrivagesGraphiques: true },
+    { id: 3, nom: 'Musée national', seuil: 1000000, niveauMax: 3, ateliers: 3, expositions: true },
+    { id: 4, nom: 'Musée international', seuil: 3000000, niveauMax: 4, ateliers: 3 },
+    { id: 5, nom: 'Musée universel', seuil: 6000000, niveauMax: 5, ateliers: 4 },
   ],
   frequentation: { joursMoyenne: 7, joursAnnee: 365 },
 
@@ -235,7 +259,7 @@ export const CONFIG = {
     // Niveau maximal d'un candidat selon le statut du musée.
     niveauCandidatMax: [2, 3, 4, 6, 8, 10],
     fraisRecrutementHeures: 10,
-    // Au-delà de ce retard (en heures de masse salariale), on ne recrute plus.
+    // Au-delà de ce retard (en heures de salaires et d'entretien), on ne recrute plus.
     arrieresToleresHeures: 10,
     // Deux personnes de même niveau ne se valent pas. Efficacité tirée en
     // cloche entre min et max (moyenne 1), appliquée à tout ce qu'apporte la

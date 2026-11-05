@@ -3,7 +3,7 @@
 // nuit, le vol en salle et le vandalisme. Le matériel et les métiers ne
 // protègent chacun que contre certaines d'entre elles.
 
-import { prestige, borner } from './regles.js';
+import { prestige, borner, niveau } from './regles.js';
 import { effetsPersonnel, employes } from './personnel.js';
 import { visiteursDuJour } from './visiteurs.js';
 import { placesPubliques } from './batiment.js';
@@ -133,6 +133,8 @@ function perdreReputation(cfg, etat, m) {
 
 function voler(cfg, etat, J, m, o, p) {
   retirer(etat, o, J);
+  const taux = cfg.charges?.assurance?.indemnite || 0;
+  if (taux) etat.indemnites = (etat.indemnites || 0) + Math.round(niveau(cfg, o.niveau).prix * taux);
   o.lieu = 'volee';
   o.voleeLe = J;
   perdreReputation(cfg, etat, m);

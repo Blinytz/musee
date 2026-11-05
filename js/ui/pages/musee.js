@@ -48,6 +48,11 @@ function plan(app, e, cfg, fiches, jour, ouverture) {
     }
   }
   for (const s of espaces.filter((x) => x.type !== 'salle')) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax));
+  // Les chantiers : un mur sous échafaudage, qui avance pendant les sessions.
+  for (const c of e.chantiers || []) {
+    murs.push(h('section.mur.travaux',
+      h('div.mur-vide', h('a.plaque', { href: '#/investir' }, c.nom, h('small', `Chantier · ${Math.floor(c.fait)} / ${c.heures} h`)))));
+  }
   if (e.batiment.exposition) {
     const x = e.expositions.courante;
     murs.push(h('section.mur', { style: { '--mur': '#1f1a17' } },

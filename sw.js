@@ -38,6 +38,7 @@ const FICHIERS = [
   './js/moteur/alea.js',
   './js/moteur/arrivages.js',
   './js/moteur/batiment.js',
+  './js/moteur/charges.js',
   './js/moteur/classement.js',
   './js/moteur/etat.js',
   './js/moteur/journee.js',

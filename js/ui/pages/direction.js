@@ -4,7 +4,7 @@
 import { h, icone, nombre, grand, ajouter } from '../dom.js';
 import { jauge, portrait } from '../composants.js';
 import { compter, placesPubliques } from '../../moteur/batiment.js';
-import { visiteursDuJour, effetCampagnes, espacesOuverts } from '../../moteur/visiteurs.js';
+import { visiteursDuJour, effetCampagnes, espacesOuverts, coutVisiteur } from '../../moteur/visiteurs.js';
 import { risqueMaximal } from '../../moteur/securite.js';
 import { avecNiveaux, masseSalariale } from '../../moteur/personnel.js';
 import { frequentationAnnualisee, prixOptimal } from '../../moteur/regles.js';
@@ -66,7 +66,8 @@ function chiffres(app, e, cfg, jour) {
         h('button.bouton.petit.icone-seule', { type: 'button', 'aria-label': 'Baisser le prix', disabled: e.prixBillet <= 0, onclick: () => app.agir('fixerPrix', e.prixBillet - 1) }, icone('retirer')),
         h('b', e.prixBillet === 0 ? 'Gratuit' : `${e.prixBillet} ✦`),
         h('button.bouton.petit.icone-seule', { type: 'button', 'aria-label': 'Augmenter le prix', disabled: e.prixBillet >= cfg.visiteurs.prix.max, onclick: () => app.agir('fixerPrix', e.prixBillet + 1) }, icone('ajouter'))),
-      h('small', `Optimal ${Math.round(prixOptimal(cfg, e.reputation))} ✦`)),
+      // Le billet qui rapporte le plus couvre d'abord le coût d'un visiteur.
+      h('small', `Coût d'un visiteur ${decimale(coutVisiteur(cfg, e))} ✦ · optimal ${Math.max(1, Math.round(prixOptimal(cfg, e.reputation) + coutVisiteur(cfg, e)))} ✦`)),
     h('div.chiffre', h('span', icone('musee'), 'Places'), h('b', nombre(places)),
       h('small', `Densité ${places ? Math.round(v / places) : 0}`)));
 }

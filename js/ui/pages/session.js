@@ -137,16 +137,22 @@ export function afficherSession(app, { onFin }) {
 }
 
 /**
- * Recettes, salaires, impôts, net : ce que devient l'argent des visites.
- * `f` : recettes, salaires, arrieresPayes, arrieresRestants, impot, net.
+ * Ce que devient l'argent des visites : le billet encaissé en entier, puis
+ * chaque dépense en clair, puis l'impôt. Une ligne nulle n'est pas affichée.
  */
 export function lignesFinances(f) {
   const n = (x) => Math.round(x).toLocaleString('fr-FR');
   const ligne = (libelle, valeur, style) => h('div.ligne.espace', h('span.discret', libelle), h('span.nombre', { style }, valeur));
+  const moins = (libelle, x) => (x > 0.5 ? ligne(libelle, `-${n(x)} ✦`) : null);
   return [
     ligne('Recettes', `${n(f.recettes)} ✦`),
-    f.salaires + (f.arrieresPayes || 0) > 0.5 ? ligne('Salaires', `-${n(f.salaires + (f.arrieresPayes || 0))} ✦`) : null,
-    f.impot > 0.5 ? ligne('Impôts', `-${n(f.impot)} ✦`) : null,
+    f.indemnites > 0.5 ? ligne('Indemnités d\'assurance', `${n(f.indemnites)} ✦`) : null,
+    moins('Accueil des visiteurs', f.accueil || 0),
+    moins('Salaires', f.salaires + (f.arrieresPayes || 0)),
+    moins('Entretien', f.entretien || 0),
+    moins('Assurance', f.assurance || 0),
+    moins('Fournitures', f.fournitures || 0),
+    moins('Impôts', f.impot),
     f.arrieresRestants > 0.5 ? ligne('Arriérés', `${n(f.arrieresRestants)} ✦`, { color: 'var(--rouge)' }) : null,
     h('div.ligne.espace', h('b', 'Net'), h('span.eclats', n(f.net))),
   ];

@@ -15,7 +15,8 @@ import {
 } from '../js/moteur/actions.js';
 import { avancer, fermerJour, ouvrirJour, creerMusee } from '../js/moteur/journee.js';
 import { visiteursDuJour } from '../js/moteur/visiteurs.js';
-import { refusAccrochage } from '../js/moteur/batiment.js';
+import { refusAccrochage, espacesPublics } from '../js/moteur/batiment.js';
+import { avancerChantiers } from '../js/moteur/charges.js';
 
 const cfg = configEffective({});
 const T = cfg.temps;
@@ -204,19 +205,23 @@ test('arrêt anticipé : rien ne compte sous 10 minutes', () => {
   assert.equal(resultatSession(cfg, e.session, 5 * 3600e3).minutes, 60);
 });
 
-test('session achevée : progression, surplus perdu, maîtrise, gain arrondi en dessous', () => {
+test('session achevée : progression, surplus perdu, maîtrise, charges en clair', () => {
   let e = etatAvec([{ id: 1, lieu: 'atelier', progression: 0.5 }]);
   e.session = null;
   e = enSession(e, 120);
   e.session.figes.tauxHoraire = 10.7;
   e.session.figes.salaireHoraire = 0.5;
+  e.session.figes.charges = { accueil: 2, entretien: 1.5, assurance: 0, fournitures: 0.25 };
   const r = terminerSession(cfg, e, 120 * 60e3, 20000);
   assert.equal(r.etat.oeuvres[1].progression, 1);
   assert.equal(r.etat.oeuvres[1].restaureeLe, 20000);
   assert.ok(Math.abs(r.resultat.perdu - (120 * (1 + 0.25 * 120 / 420) - 60)) < 1e-9);
   assert.equal(r.etat.maitrise.peinture, 120);
-  // Recettes 21,4, salaires 1 (le gardien de départ), aucun impôt sous 100 ✦/h.
-  assert.equal(r.resultat.eclats, 20);
+  // Recettes 21, salaires 1, accueil 4, entretien 3, fournitures 1 (0,5
+  // arrondi), aucun impôt sous 100 ✦/h : 12 tout rond.
+  const f = r.resultat.finances;
+  assert.deepEqual([f.recettes, f.salaires, f.accueil, f.entretien, f.assurance, f.fournitures, f.impot], [21, 1, 4, 3, 0, 1, 0]);
+  assert.equal(r.resultat.eclats, 12);
   assert.equal(r.gain.cle, 'musee:session:11111111-1111-4111-8111-111111111111');
 });
 
@@ -311,11 +316,30 @@ test('investissements : prix progressifs du bâtiment', () => {
   assert.throws(() => investir(cfg, e, { quoi: 'salle' }), /ailes sont pleines/);
   const aile = investir(cfg, e, { quoi: 'aile' });
   assert.equal(aile.depense.montant, 5000);
-  assert.equal(investir(cfg, aile.etat, { quoi: 'aile' }).depense.montant, 12500);
+  assert.throws(() => investir(cfg, aile.etat, { quoi: 'aile' }), /déjà en chantier/);
+  const livree = structuredClone(aile.etat);
+  avancerChantiers(cfg, livree, 600 * 60, 20000);
+  assert.equal(livree.batiment.ailes, 2);
+  assert.equal(investir(cfg, livree, { quoi: 'aile' }).depense.montant, 12500);
+  // Un agrandissement à la fois par salle : on attend la fin du chantier.
   assert.deepEqual([0, 1, 2].reduce((acc) => {
     const r = investir(cfg, acc.e, { quoi: 'agrandir:s1' });
+    avancerChantiers(cfg, r.etat, 120 * 60, 20000);
     return { e: r.etat, p: [...acc.p, r.depense.montant] };
-  }, { e, p: [] }).p, [400, 1200, 3600]);
+  }, { e: livree, p: [] }).p, [400, 1200, 3600]);
+});
+
+test('chantiers : une salle payée sort de terre pendant les sessions, un chantier à la fois', () => {
+  const e = investir(cfg, etatAvec(), { quoi: 'salle' }).etat;
+  assert.equal(espacesPublics(e).length, 2, 'la salle en chantier n\'accueille personne');
+  assert.equal(e.chantiers.length, 1);
+  avancerChantiers(cfg, e, 3 * 60, 20000);
+  assert.equal(espacesPublics(e).length, 2);
+  assert.equal(e.chantiers[0].fait, 3);
+  avancerChantiers(cfg, e, 60, 20001);
+  assert.equal(espacesPublics(e).length, 3);
+  assert.equal(e.chantiers.length, 0);
+  assert.ok(e.evenements.some((x) => x.type === 'chantier'));
 });
 
 test('surcharges de réglages : un prix change sans effacer le reste du niveau', () => {

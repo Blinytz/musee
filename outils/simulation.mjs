@@ -19,8 +19,10 @@
 // Depuis docs/ECONOMIE.md : il embauche au niveau 1 un gardien pour chaque
 // salle garnie (sinon elle reste fermée) et une équipe de sécurité modeste
 // (`EQUIPE`), achète le matériel de sécurité dès qu'il s'ouvre, et rien
-// d'autre. Les gains affichés sont nets de salaires et d'impôts ;
-// `--sans-vol` coupe vols et vandalisme.
+// d'autre. Un agrandissement sort de terre pendant les sessions : en
+// attendant, l'œuvre restaurée patiente en réserve. Les gains affichés sont
+// nets de toutes les charges et de l'impôt ; `--sans-vol` coupe vols et
+// vandalisme.
 
 import { CONFIG, configEffective } from '../js/config.js';
 import { creerEtat } from '../js/moteur/etat.js';
@@ -34,14 +36,16 @@ import {
   espacesPublics, contenuEspace, prixAgrandissement, prixSalle, prixAile, aileDisponible,
 } from '../js/moteur/batiment.js';
 import { tauxHoraire, espacesOuverts } from '../js/moteur/visiteurs.js';
+import { chargesHoraires } from '../js/moteur/charges.js';
 
-// Repères de la spec : jours pour 2, 3 et 4 h par jour, gain horaire approché.
+// Repères : jours pour 2, 3 et 4 h par jour (spec), gain net par heure visé
+// par docs/PROPOSITION-GESTION.md (le musée garde de 9 à 5 % du billet).
 const REPERES = {
-  1: { jours: [3, 4, 4], gain: 10 },
-  2: { jours: [24, 16, 13], gain: 70 },
-  3: { jours: [5 * 30.44, 3.5 * 30.44, 2.7 * 30.44], gain: 700 },
-  4: { jours: [17 * 30.44, 10 * 30.44, 8 * 30.44], gain: 2900 },
-  5: { jours: [2.6 * 365, 1.6 * 365, 1.1 * 365], gain: 8200 },
+  1: { jours: [3, 4, 4], gain: 12 },
+  2: { jours: [24, 16, 13], gain: 38 },
+  3: { jours: [5 * 30.44, 3.5 * 30.44, 2.7 * 30.44], gain: 255 },
+  4: { jours: [17 * 30.44, 10 * 30.44, 8 * 30.44], gain: 615 },
+  5: { jours: [2.6 * 365, 1.6 * 365, 1.1 * 365], gain: 920 },
 };
 const HEURES_REPERES = [2, 3, 4];
 
@@ -85,8 +89,9 @@ function placeLibre(cfg, etat, support) {
   return null;
 }
 
-/** Achète la capacité la moins chère ; renvoie le prix payé. */
+/** Achète la capacité la moins chère ; renvoie le prix payé. Un chantier à la fois. */
 function agrandir(cfg, etat) {
+  if ((etat.chantiers || []).length) return null;
   const options = [];
   for (const e of etat.batiment.salles) {
     const p = prixAgrandissement(cfg, etat, e.id);
@@ -99,18 +104,9 @@ function agrandir(cfg, etat) {
   }
   if (!options.length) return null;
   options.sort((a, b) => a.prix - b.prix);
-  const choix = options[0];
-  let paye = 0;
-  let r;
-  if (choix.quoi === 'aile') {
-    r = investir(cfg, etat, { quoi: 'aile' });
-    paye += r.depense.montant;
-    r = investir(cfg, r.etat, { quoi: 'salle' });
-  } else {
-    r = investir(cfg, etat, { quoi: choix.quoi });
-  }
-  paye += r.depense.montant;
-  return { etat: r.etat, paye };
+  // L'aile d'abord ; sa salle s'achètera une fois l'aile livrée.
+  const r = investir(cfg, etat, { quoi: options[0].quoi });
+  return { etat: r.etat, paye: r.depense.montant };
 }
 
 export async function simuler(cfg, heuresParJour, opts = {}) {
@@ -124,6 +120,7 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
   const compte = {
     depenses: 0, oeuvres: 0, capacite: 0, securite: 0, recrutement: 0, gains: 0, deficitMax: 0,
     recettes: 0, salaires: 0, impots: 0, vols: 0, vandalismes: 0, retrouvees: 0, perdues: 0,
+    accueil: 0, entretien: 0, assurance: 0, fournitures: 0,
   };
   let embauches = 0;
   const atteints = {};
@@ -165,22 +162,26 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
     compte.recettes += fin.resultat.finances.recettes;
     compte.salaires += fin.resultat.finances.salaires;
     compte.impots += fin.resultat.finances.impot;
+    for (const k of ['accueil', 'entretien', 'assurance', 'fournitures']) compte[k] += fin.resultat.finances[k] || 0;
     if (fin.resultat.perdu > 0) perdus.push(fin.resultat.perdu);
 
-    // Œuvre achevée : accrochée, quitte à agrandir.
+    // Œuvre achevée : accrochée, sinon en réserve le temps qu'un chantier
+    // livre une salle. Les œuvres qui attendent en réserve passent d'abord.
     const o = etat.oeuvres[enCours.id];
-    if (o.progression >= 1) {
+    if (o.progression >= 1) etat = deplacer(cfg, etat, { oeuvre: o.id, vers: { lieu: 'reserve' } }, jour).etat;
+    for (const x of Object.values(etat.oeuvres).filter((y) => y.lieu === 'reserve' && y.progression >= 1)) {
       let place = placeLibre(cfg, etat, support);
-      while (!place) {
+      if (!place) {
         const a = agrandir(cfg, etat);
-        if (!a) break;
-        etat = a.etat;
-        compte.depenses += a.paye;
-        compte.capacite += a.paye;
-        place = placeLibre(cfg, etat, support);
+        if (a) {
+          etat = a.etat;
+          compte.depenses += a.paye;
+          compte.capacite += a.paye;
+          place = placeLibre(cfg, etat, support);
+        }
       }
-      if (place) etat = deplacer(cfg, etat, { oeuvre: o.id, vers: { lieu: 'espace', ...place } }, jour).etat;
-      else etat = deplacer(cfg, etat, { oeuvre: o.id, vers: { lieu: 'reserve' } }, jour).etat;
+      if (!place) break;
+      etat = deplacer(cfg, etat, { oeuvre: x.id, vers: { lieu: 'espace', ...place } }, jour).etat;
     }
     // Un gardien par salle garnie, l'équipe de sécurité, et le matériel de
     // sécurité dès qu'il s'ouvre.
@@ -225,7 +226,10 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
       atteints[s] = {
         jours: j + 1,
         gainHoraire: Math.round(brut),
-        netHoraire: bilanFinancier(cfg, { tauxHoraire: brut, salaireHoraire: masseSalariale(cfg, etat), minutes: 60 }).net,
+        netHoraire: bilanFinancier(cfg, {
+          tauxHoraire: brut, salaireHoraire: masseSalariale(cfg, etat), minutes: 60,
+          charges: chargesHoraires(cfg, etat, jour + 1, Math.min(s, cfg.niveaux.length - 1)),
+        }).net,
         oeuvres: Object.values(etat.oeuvres).filter((x) => x.progression >= 1).length,
         visiteurs: etat.historique[etat.historique.length - 1].visiteurs,
       };
@@ -285,9 +289,10 @@ async function principal() {
   for (const r of resultats) {
     const c = r.compte;
     const n = (x) => Math.round(x).toLocaleString('fr-FR');
-    console.log(`${r.heuresParJour} h/jour : recettes ${n(c.recettes)}, salaires ${n(c.salaires)}, impôts ${n(c.impots)}, net ${n(c.gains)} ✦`);
+    console.log(`${r.heuresParJour} h/jour : recettes ${n(c.recettes)}, accueil ${n(c.accueil)}, salaires ${n(c.salaires)}, entretien ${n(c.entretien)}, `
+      + `assurance ${n(c.assurance)}, fournitures ${n(c.fournitures)}, impôts ${n(c.impots)}, net ${n(c.gains)} ✦`);
     console.log(`  dépensés ${n(c.depenses)} ✦ (œuvres ${n(c.oeuvres)}, salles ${n(c.capacite)}, sécurité ${n(c.securite)}, recrutement ${n(c.recrutement)}), `
-      + `apport extérieur maximal ${n(c.deficitMax)} ✦`);
+      + `soit ${Math.round(c.depenses / Math.max(1, c.gains) * 100)} % du net, apport extérieur maximal ${n(c.deficitMax)} ✦`);
     console.log(`  vols ${c.vols}, vandalismes ${c.vandalismes}, œuvres retrouvées ${c.retrouvees}, perdues ${c.perdues}`);
   }
 }
