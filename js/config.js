@@ -120,6 +120,26 @@ export const CONFIG = {
     fournitures: [0, 2, 8, 30, 100, 300],
   },
 
+  // Usure des œuvres exposées (docs/ECONOMIE.md, section 4) : `parJour` par
+  // jour de visite (la moitié en près de trois mois), `effet` sur l'attrait
+  // à usure complète. Au-delà de `maxExposable`, l'œuvre ne s'accroche plus.
+  // Le vandalisme ajoute de `vandalisme[0]` à `vandalisme[1]` d'usure ; une
+  // œuvre retrouvée revient usée au moins de `retrouvee`.
+  usure: { parJour: 0.005, effet: 0.4, aReparer: 0.4, maxExposable: 0.8, vandalisme: [0.4, 0.8], retrouvee: 0.6 },
+
+  // Travaux d'atelier menés par les restaurateurs (les assistants), en vrai
+  // temps. Jours = charge du niveau × ampleur / vitesse, ampleur = `ravivage`
+  // + `parUsure` × usure pour une réparation. Vitesse = base + niveau × pas,
+  // × efficacité. Une œuvre restée `reposPriveeJours` en collection privée
+  // retrouve tout son attrait de nouveauté.
+  atelier: {
+    joursBase: [1, 1, 1.5, 2, 2.5, 3], ravivage: 0.5, parUsure: 1.5, seuilReparation: 0.1,
+    vitesseBase: 0.8, vitesseNiveau: 0.1, reposPriveeJours: 15,
+    // Attrait de nouveauté d'une œuvre ravivée (atelier ou repos) : moins
+    // que celui d'une nouvelle acquisition ou d'un retour de prêt.
+    nouveaute: 1.4,
+  },
+
   // La cote du musée : plus il est connu, plus les vendeurs demandent cher.
   cote: [1, 1, 1, 1.3, 1.8, 2.5],
 
@@ -147,6 +167,8 @@ export const CONFIG = {
     agrandissement: { places: 3, max: 15, prix: [400, 1200, 3600] },
     reserve: { places: 10, prix: 200, facteur: 2 },
     privee: { places: 3, prix: 300, facteur: 2 },
+    // Emplacements d'atelier en plus de ceux du statut.
+    atelier: { prix: 2000, facteur: 3, max: 4 },
   },
 
   // Espaces publics particuliers. `supports` : ce qu'on peut y accrocher.
@@ -302,7 +324,7 @@ export const CONFIG = {
       vandalisme: { nom: 'Vandalisme', base: 0.02, plancher: 20, min: 0, max: 0.2, reputation: 2, confiance: 0.5, exposant: 1.5, diviseur: 10, degatsMin: 0.15, degatsMax: 0.40 },
     },
     // Poids d'une œuvre dans le risque de cambriolage selon son emplacement.
-    poids: { espace: 1, exposition: 1, privee: 0.8, reserve: 0.6, reserveForte: 0.2, atelier: 0.5 },
+    poids: { espace: 1, exposition: 1, privee: 0, reserve: 0.6, reserveForte: 0.2, atelier: 0.5 },
     // Vol en salle : ce qui se glisse sous un manteau part plus facilement.
     portabilite: { estampe: 2, photographie: 2, peinture: 1, sculpture: 0.5 },
     enquete: 0.07,

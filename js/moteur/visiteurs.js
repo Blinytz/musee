@@ -9,6 +9,7 @@ import {
 } from './regles.js';
 import { espacesPublics, placesPubliques, contenuEspace } from './batiment.js';
 import { effetsPersonnel } from './personnel.js';
+import { facteurUsure } from './atelier.js';
 
 /**
  * Espaces ouverts : une salle n'ouvre que si un gardien la tient. Les
@@ -59,7 +60,7 @@ export function apports(cfg, etat, jour) {
     const attrait = cfg.espaces[e.type]?.attrait ?? 1;
     liste.push({
       id: o.id, espace: e.id,
-      valeur: cfg.visiteurs.parPrestige * prestige(cfg, o.niveau) * nouveaute(cfg, o.joursExpo) * coherence * attrait,
+      valeur: cfg.visiteurs.parPrestige * prestige(cfg, o.niveau) * nouveaute(cfg, o.joursExpo) * coherence * attrait * facteurUsure(cfg, o),
     });
   }
   const expo = etat.expositions?.courante;

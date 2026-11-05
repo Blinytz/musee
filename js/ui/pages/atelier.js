@@ -1,8 +1,10 @@
 // Atelier : emplacements de restauration, lancement des sessions, maîtrise.
 
 import { h, vider, icone, nombre, pourcent, duree, ajouter } from '../dom.js';
-import { feuille, puceNiveau, jauge, tenter, vignette, cartel, cadreOeuvre, couleurMur } from '../composants.js';
+import { feuille, puceNiveau, jauge, tenter, vignette, cartel, cadreOeuvre, couleurMur, portrait } from '../composants.js';
 import { emplacementsAtelier } from '../../moteur/batiment.js';
+import { restaurateursLibres } from '../../moteur/atelier.js';
+import { employes } from '../../moteur/personnel.js';
 import {
   niveau, niveauMaitrise, progressionMaitrise, bonusMaitrise, effets, travailRequis,
 } from '../../moteur/regles.js';
@@ -21,16 +23,43 @@ export async function afficher(app, vue) {
   const emplacements = [];
   for (let i = 0; i < Math.max(n, enAtelier.length); i++) {
     const o = enAtelier[i];
-    emplacements.push(o ? await carteOeuvre(app, e, cfg, o) : emplacementVide(app, e, cfg));
+    if (!o) emplacements.push(emplacementVide(app, e, cfg));
+    else emplacements.push(o.travaux ? await carteTravaux(app, e, cfg, o) : await carteOeuvre(app, e, cfg, o));
   }
+  const restaurateurs = employes(e, 'assistant');
+  const libres = restaurateursLibres(cfg, e).length;
 
   ajouter(vue, 
-    h('div.section', h('h2', 'Atelier'), h('span.aside', `${enAtelier.length}/${n}`)),
+    h('div.section', h('h2', 'Atelier'), h('span.aside', `${enAtelier.length}/${n} emplacements`)),
+    h('a.carte.equipe', { href: '#/personnel', style: { textDecoration: 'none', color: 'inherit', marginBottom: '12px' } },
+      restaurateurs.length
+        ? h('div.equipe-portraits', restaurateurs.slice(0, 4).map((r) => portrait(r.nom)))
+        : h('span.portrait', { style: { display: 'grid', placeItems: 'center', color: 'var(--accent)' } }, icone('atelier')),
+      h('div', { style: { flex: 1, minWidth: 0 } },
+        h('b', 'Restaurateurs'),
+        h('div.tres-discret', restaurateurs.length ? `${libres} libre${libres > 1 ? 's' : ''} sur ${restaurateurs.length}` : 'Aucun : réparations impossibles')),
+      icone('droite')),
     h('div.pile', emplacements),
     maitrises(e, cfg),
     h('div', { style: { marginTop: '14px' } },
       h('a.bouton.plein', { href: '#/historique' }, icone('historique'), 'Historique des sessions')),
   );
+}
+
+/** Une réparation ou un ravivage en cours : l'œuvre, qui y travaille, quand elle ressort. */
+async function carteTravaux(app, e, cfg, o) {
+  const fiche = await app.fiche(o.id);
+  const t = o.travaux;
+  const reste = Math.max(0, t.fin - app.jeu.jour());
+  const total = Math.max(1, t.fin - t.debut);
+  return h('div.chevalet',
+    h('button.chevalet-toile', { type: 'button', style: { '--mur': '#3a2f28', padding: '22px 20px 16px' }, onclick: () => app.naviguer(`oeuvre/${o.id}`) },
+      cadreOeuvre(app, { id: o.id, fiche, oeuvre: o, hauteur: 110, largeurMax: 200, cote: 400 }),
+      h('span.plaque', t.type === 'ravivage' ? 'Ravivage' : 'Réparation', h('small', reste ? `prête dans ${reste} j` : 'prête demain'))),
+    h('div.chevalet-corps',
+      h('div.ligne.espace', h('h3', cartel(app, o, fiche).titre), puceNiveau(cfg, o.niveau)),
+      jauge(1 - reste / total),
+      h('div.tres-discret', `${t.nom} s'en occupe`)));
 }
 
 async function carteOeuvre(app, e, cfg, o) {

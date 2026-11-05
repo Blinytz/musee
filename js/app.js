@@ -17,8 +17,10 @@ const PAGES = {
   direction: () => import('./ui/pages/direction.js'),
   // Ancienne adresse du menu, gardée pour les notifications déjà envoyées.
   plus: () => import('./ui/pages/direction.js'),
-  reserve: () => import('./ui/pages/reserve.js'),
-  privee: () => import('./ui/pages/reserve.js'),
+  collection: () => import('./ui/pages/collection.js'),
+  // Anciennes adresses : la Collection, filtrée.
+  reserve: () => import('./ui/pages/collection.js'),
+  privee: () => import('./ui/pages/collection.js'),
   investir: () => import('./ui/pages/investir.js'),
   expositions: () => import('./ui/pages/expositions.js'),
   rapport: () => import('./ui/pages/rapport.js'),
@@ -35,7 +37,7 @@ const ONGLETS = [
   { route: 'arrivages', nom: 'Arrivages', icone: 'arrivages' },
   { route: 'direction', nom: 'Direction', icone: 'direction' },
 ];
-const SOUS_PAGES_DIRECTION = ['direction', 'plus', 'reserve', 'privee', 'investir', 'expositions', 'rapport', 'historique', 'reglages', 'personnel', 'securite', 'classement'];
+const SOUS_PAGES_DIRECTION = ['direction', 'plus', 'collection', 'reserve', 'privee', 'investir', 'expositions', 'rapport', 'historique', 'reglages', 'personnel', 'securite', 'classement'];
 
 const parametresUrl = new URLSearchParams(location.search);
 const demo = parametresUrl.has('demo');

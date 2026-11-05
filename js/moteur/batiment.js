@@ -52,8 +52,16 @@ export function priveeLibre(etat) {
   return etat.batiment.privee.places - compter(etat, 'privee');
 }
 
+/** Emplacements d'atelier : ceux du statut, plus ceux que l'on a ajoutés. */
 export function emplacementsAtelier(cfg, etat) {
-  return cfg.statuts[etat.statut].ateliers;
+  return cfg.statuts[etat.statut].ateliers + (etat.batiment.atelier?.achats || 0);
+}
+
+export function prixAtelier(cfg, etat) {
+  const a = cfg.batiment.atelier;
+  const n = etat.batiment.atelier?.achats || 0;
+  if (!a || n >= a.max) return null;
+  return Math.round(a.prix * a.facteur ** n);
 }
 
 export function atelierLibre(cfg, etat) {
@@ -73,6 +81,8 @@ export function refusAccrochage(cfg, etat, oeuvre, espaceId) {
   const e = espace(etat, espaceId);
   if (!e) return 'Espace inconnu';
   if (oeuvre.progression < 1) return 'Restauration inachevée';
+  if (oeuvre.travaux) return 'En travaux à l\'atelier';
+  if ((oeuvre.usure || 0) >= (cfg.usure?.maxExposable ?? Infinity)) return 'Trop abîmée : à réparer';
   if (!supportsEspace(cfg, e.type).includes(oeuvre.support)) {
     return oeuvre.support === 'estampe' || oeuvre.support === 'photographie'
       ? 'Réservé au cabinet d\'arts graphiques'

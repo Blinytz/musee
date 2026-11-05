@@ -10,6 +10,7 @@ import { placesPubliques } from './batiment.js';
 import { generateur, choixPondere } from './alea.js';
 import { evenement } from './etat.js';
 import { sortirDuPublic } from './lieux.js';
+import { abimer } from './atelier.js';
 
 export const MENACES = ['nuit', 'jour', 'vandalisme'];
 
@@ -168,13 +169,13 @@ export function tirages(cfg, etat, J) {
       const v = s.menaces.vandalisme;
       const o = choixPondere(oeuvres.filter(exposee).map((x) => [x, prestige(cfg, x.niveau) ** v.exposant]), alea);
       if (!o) continue;
-      // L'œuvre abîmée est décrochée : elle n'est plus exposable avant d'être
-      // restaurée de nouveau.
-      const degats = v.degatsMin + (v.degatsMax - v.degatsMin) * alea();
+      // L'œuvre abîmée est décrochée et part en réserve, d'où on l'envoie en
+      // réparation à l'atelier : le joueur ne la restaure pas une seconde fois.
+      const [min, max] = cfg.usure?.vandalisme || [v.degatsMin, v.degatsMax];
+      const degats = min + (max - min) * alea();
       retirer(etat, o, J);
       o.lieu = 'reserve';
-      o.progression = Math.max(0, o.progression - degats);
-      if (o.progression < 1) o.restaureeLe = null;
+      abimer(o, degats);
       perdreReputation(cfg, etat, m);
       etat.securite.historique.push({ type: 'vandalisme', jour: J, oeuvre: o.id, titre: o.titre, niveau: o.niveau, degats, probabilite: p });
       evenement(etat, J, 'vandalisme', { oeuvre: o.id, titre: o.titre, degats: Math.round(degats * 100) });
@@ -195,8 +196,8 @@ export function enquete(cfg, etat, J) {
     if (alea() < chance) {
       o.lieu = 'reserve';
       delete o.voleeLe;
-      o.progression = Math.max(0, o.progression - s.degats);
-      if (o.progression < 1) o.restaureeLe = null;
+      // Elle revient abîmée : réparation à l'atelier.
+      o.usure = Math.max(o.usure || 0, cfg.usure?.retrouvee ?? s.degats);
       etat.securite.historique.push({ type: 'retrouvee', jour: J, oeuvre: o.id, titre: o.titre });
       evenement(etat, J, 'retrouvee', { oeuvre: o.id, titre: o.titre });
       faits.push({ type: 'retrouvee', oeuvre: o.id, titre: o.titre });

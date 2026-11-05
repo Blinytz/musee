@@ -28,7 +28,7 @@ import { CONFIG, configEffective } from '../js/config.js';
 import { creerEtat } from '../js/moteur/etat.js';
 import { fermerJour, ouvrirJour } from '../js/moteur/journee.js';
 import {
-  demarrerSession, terminerSession, deplacer, investir,
+  demarrerSession, terminerSession, deplacer, investir, confierAtelier,
 } from '../js/moteur/actions.js';
 import { niveauMaitrise, prixArrivage, bilanFinancier } from '../js/moteur/regles.js';
 import { personne, fraisRecrutement, masseSalariale, rolesOuverts, employes } from '../js/moteur/personnel.js';
@@ -61,6 +61,8 @@ const EQUIPE = {
   chefSecurite: () => 1,
   enqueteur: () => 1,
   pilote: () => 1,
+  // Restaurateurs d'atelier : un par statut, pour les réparations.
+  assistant: (st) => st,
 };
 
 function lireOptions(argv) {
@@ -120,7 +122,7 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
   const compte = {
     depenses: 0, oeuvres: 0, capacite: 0, securite: 0, recrutement: 0, gains: 0, deficitMax: 0,
     recettes: 0, salaires: 0, impots: 0, vols: 0, vandalismes: 0, retrouvees: 0, perdues: 0,
-    accueil: 0, entretien: 0, assurance: 0, fournitures: 0,
+    accueil: 0, entretien: 0, assurance: 0, fournitures: 0, reparations: 0,
   };
   let embauches = 0;
   const atteints = {};
@@ -130,7 +132,7 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
     const jour = jourDepart + j;
 
     // Une œuvre à l'atelier, du plus haut niveau accessible.
-    let enCours = Object.values(etat.oeuvres).find((o) => o.lieu === 'atelier');
+    let enCours = Object.values(etat.oeuvres).find((o) => o.lieu === 'atelier' && !o.travaux && o.progression < 1);
     // Une œuvre retrouvée après un vol revient abîmée : on la reprend d'abord.
     const abimee = Object.values(etat.oeuvres).find((o) => o.lieu === 'reserve' && o.progression < 1);
     if (!enCours && abimee) {
@@ -198,6 +200,22 @@ export async function simuler(cfg, heuresParJour, opts = {}) {
         const voulu = EQUIPE[r.id]?.(etat.statut) || 0;
         while (employes(etat, r.id).length < voulu) recruter(r.id);
       }
+    }
+    // Réparations : les œuvres les plus usées partent à l'atelier dès qu'un
+    // emplacement et un restaurateur sont libres ; s'il en attend trop, il
+    // agrandit l'atelier.
+    const usees = Object.values(etat.oeuvres).filter((x) => x.lieu === 'espace' && (x.usure || 0) >= cfg.usure.aReparer * 0.75)
+      .sort((a, b) => b.usure - a.usure);
+    for (const x of usees) {
+      try { etat = confierAtelier(cfg, etat, { oeuvre: x.id }, jour).etat; compte.reparations++; } catch { break; }
+    }
+    if (usees.length > 3 && employes(etat, 'assistant').length > 1) {
+      try {
+        const r = investir(cfg, etat, { quoi: 'atelier' });
+        etat = r.etat;
+        compte.depenses += r.depense.montant;
+        compte.capacite += r.depense.montant;
+      } catch { /* atelier au maximum */ }
     }
     for (const inv of cfg.investissements.filter((x) => x.categorie === 'securite')) {
       if (etat.investissements.includes(inv.id) || (inv.statutMin || 0) > etat.statut) continue;
@@ -293,7 +311,7 @@ async function principal() {
       + `assurance ${n(c.assurance)}, fournitures ${n(c.fournitures)}, impôts ${n(c.impots)}, net ${n(c.gains)} ✦`);
     console.log(`  dépensés ${n(c.depenses)} ✦ (œuvres ${n(c.oeuvres)}, salles ${n(c.capacite)}, sécurité ${n(c.securite)}, recrutement ${n(c.recrutement)}), `
       + `soit ${Math.round(c.depenses / Math.max(1, c.gains) * 100)} % du net, apport extérieur maximal ${n(c.deficitMax)} ✦`);
-    console.log(`  vols ${c.vols}, vandalismes ${c.vandalismes}, œuvres retrouvées ${c.retrouvees}, perdues ${c.perdues}`);
+    console.log(`  vols ${c.vols}, vandalismes ${c.vandalismes}, œuvres retrouvées ${c.retrouvees}, perdues ${c.perdues}, réparations ${c.reparations}`);
   }
 }
 

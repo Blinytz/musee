@@ -81,6 +81,7 @@ function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax) {
     h('div.accrochage', contenu.map((id, i) => {
       const o = id !== null ? e.oeuvres[id] : null;
       const hors = o && theme && !estConforme(o, theme);
+      const usee = o && (o.usure || 0) >= cfg.usure.aReparer;
       return h('button.place', {
         type: 'button',
         classe: o ? 'occupee' : 'libre',
@@ -88,7 +89,11 @@ function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax) {
         dataset: { espace: s.id, place: i, ...(o ? { oeuvre: id } : {}) },
         'aria-label': o ? o.titre : 'Place libre',
         onclick: () => (o ? app.naviguer(`oeuvre/${id}`) : choisirOeuvre(app, e, cfg, s, i, fiches)),
-      }, o ? [cadreOeuvre(app, { id, fiche: fiches.get(id), oeuvre: o, hauteur: hauteurCadre(o.niveau), largeurMax, cote: 400 }), hors ? h('span.hors-theme') : null]
+      }, o ? [
+        cadreOeuvre(app, { id, fiche: fiches.get(id), oeuvre: o, hauteur: hauteurCadre(o.niveau), largeurMax, cote: 400 }),
+        hors ? h('span.hors-theme') : null,
+        usee ? h('span.a-reparer', { title: 'À réparer' }, icone('atelier')) : null,
+      ]
         : icone('ajouter'));
     })),
     h('div.mur-pied',
@@ -101,9 +106,10 @@ function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax) {
 
 /** Œuvres restaurées disponibles pour l'accrochage, glissables vers une place. */
 function bac(app, e, cfg, fiches) {
-  const libres = Object.values(e.oeuvres).filter((o) => o.progression >= 1 && (o.lieu === 'reserve' || o.lieu === 'privee' || o.lieu === 'atelier'));
+  const libres = Object.values(e.oeuvres).filter((o) => o.progression >= 1 && !o.travaux
+    && (o.usure || 0) < cfg.usure.maxExposable && (o.lieu === 'reserve' || o.lieu === 'privee' || o.lieu === 'atelier'));
   return h('section.mur.reserve-mur', { style: { '--mur': '#2a1d17' } },
-    h('div.bac-titre', h('span', 'À accrocher'), h('span', libres.length)),
+    h('div.bac-titre', h('span', `À accrocher · ${libres.length}`), h('a', { href: '#/collection' }, 'Collection')),
     h('div.bac', { dataset: { bac: '1' }, classe: libres.length ? '' : 'vide-bac' },
       libres.length ? libres.map((o) => h('button.place.occupee', {
         type: 'button', dataset: { oeuvre: o.id, origine: o.lieu }, 'aria-label': o.titre,
@@ -255,6 +261,14 @@ function activerGlisser(app, racine) {
   function activer() {
     if (!etat || etat.actif) return;
     etat.actif = true;
+    document.body.classList.add('glisse');
+    etat.source.classList.add('soulevee');
+    // Les places où l'œuvre ne peut pas aller se grisent pendant le geste.
+    const o = app.jeu.etat.oeuvres[etat.id];
+    for (const p of racine.querySelectorAll('.place[data-espace]')) {
+      if (o && refusAccrochage(app.jeu.cfg, app.jeu.etat, o, p.dataset.espace)) p.classList.add('interdite');
+    }
+    defiler();
     etat.fantome = h('div.fantome', etat.source.firstElementChild?.cloneNode(true));
     const c = etat.source.querySelector('canvas');
     const copie = etat.fantome.querySelector('canvas');
@@ -269,6 +283,20 @@ function activerGlisser(app, racine) {
     etat.fantome.style.top = `${y}px`;
   }
 
+  // Près du haut ou du bas de l'écran, la page défile toute seule : on peut
+  // porter une œuvre de l'étagère jusqu'à la première salle.
+  function defiler() {
+    if (!etat?.actif) return;
+    const marge = 90;
+    const y = etat.yCourant ?? etat.y;
+    const bas = window.innerHeight - 110;
+    let pas = 0;
+    if (y < marge) pas = -Math.ceil((marge - y) / 5);
+    else if (y > bas - marge) pas = Math.ceil((y - (bas - marge)) / 5);
+    if (pas) window.scrollBy(0, pas);
+    etat.defilement = requestAnimationFrame(defiler);
+  }
+
   function bouger(ev) {
     if (!etat) return;
     if (!etat.actif) {
@@ -277,9 +305,11 @@ function activerGlisser(app, racine) {
       if (d > 6) activer(); else return;
     }
     ev.preventDefault();
+    etat.yCourant = ev.clientY;
     placerFantome(ev.clientX, ev.clientY);
     const sous = document.elementFromPoint(ev.clientX, ev.clientY);
-    const cible = sous?.closest('.place[data-espace], [data-bac]') || null;
+    const touchee = sous?.closest('.place[data-espace], [data-bac]') || null;
+    const cible = touchee?.classList.contains('interdite') ? null : touchee;
     if (cible !== etat.cible) {
       etat.cible?.classList.remove('cible');
       etat.cible = cible;
@@ -310,8 +340,12 @@ function activerGlisser(app, racine) {
   function annuler() {
     if (!etat) return;
     clearTimeout(etat.minuterie);
+    cancelAnimationFrame(etat.defilement);
     etat.fantome?.remove();
     etat.cible?.classList.remove('cible');
+    etat.source.classList.remove('soulevee');
+    for (const p of racine.querySelectorAll('.interdite')) p.classList.remove('interdite');
+    document.body.classList.remove('glisse');
     etat = null;
   }
 

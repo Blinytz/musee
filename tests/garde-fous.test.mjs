@@ -50,7 +50,9 @@ test('le service worker ne supprime que ses propres caches (origine partagée)',
   assert.match(sw, /c\.startsWith\(PREFIXE\)/);
 });
 
-test('équilibrage : à partir du statut national, à moins de 10 % des repères de la spec', async () => {
+// Tolérance de 15 % : l'usure, les réparations et les chantiers ajoutent une
+// part de hasard au joueur de référence (docs/PROPOSITION-GESTION.md).
+test('équilibrage : à partir du statut national, à moins de 15 % des repères de la spec', async () => {
   // Sans cambriolage : un vol tiré au mauvais moment déplacerait les délais
   // de quelques jours sans rien dire de l'équilibrage.
   const cfg = configEffective({ securite: { menaces: { nuit: { max: 0, min: 0 }, jour: { max: 0, min: 0 }, vandalisme: { max: 0, min: 0 } } } });
@@ -59,7 +61,7 @@ test('équilibrage : à partir du statut national, à moins de 10 % des repères
     const r = await simuler(cfg, h);
     for (const s of [3, 4, 5]) {
       const ecart = r.atteints[s].jours / reperes[s][k] - 1;
-      assert.ok(Math.abs(ecart) <= 0.10, `${h} h/jour, statut ${s} : ${Math.round(ecart * 100)} %`);
+      assert.ok(Math.abs(ecart) <= 0.15, `${h} h/jour, statut ${s} : ${Math.round(ecart * 100)} %`);
     }
   }
 });

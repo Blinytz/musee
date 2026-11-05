@@ -19,6 +19,7 @@ import { generateur, choixPondere, entier } from './alea.js';
 import { jourSemaine } from './temps.js';
 import { copie, evenement, creerEtat } from './etat.js';
 import { sortirDuPublic, entrerDansLePublic } from './lieux.js';
+import { user, finirTravaux } from './atelier.js';
 
 const RETENTION_HISTORIQUE = 400;
 const RETENTION_RAPPORTS = 30;
@@ -73,6 +74,8 @@ export function fermerJour(cfg, etat, d, ctx) {
   for (const o of Object.values(etat.oeuvres)) {
     if ((o.lieu === 'espace' && ouverts.has(o.espace)) || (o.lieu === 'exposition' && ouverts.has('exposition'))) {
       o.joursExpo = (o.joursExpo || 0) + 1;
+      // La foule use un peu les œuvres qu'elle voit.
+      user(cfg, o);
     }
   }
 
@@ -130,6 +133,9 @@ export async function ouvrirJour(cfg, etat, J, ctx) {
   for (const e of etat.evenements) {
     if (e.jour === J && (e.type === 'statut' || e.type === 'classement' || e.type === 'promotion')) rapport.faits.push({ ...e });
   }
+
+  // Travaux d'atelier achevés : l'œuvre ressort intacte et ravivée.
+  rapport.faits.push(...finirTravaux(cfg, etat, J, ramener));
 
   // Fins de prêt.
   const restants = [];

@@ -279,6 +279,16 @@ input[type=range] { accent-color: var(--accent); }
 .place.libre .icone { width: 16px; height: 16px; }
 .restaurer-toile .icone { width: 26px; height: 26px; }
 .place.cible { outline: 2px dashed var(--laiton-clair); outline-offset: 12px; }
+.place .a-reparer {
+  position: absolute; left: -12px; top: -12px; z-index: 1; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--creme); color: var(--rouge); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.place .a-reparer .icone { width: 13px; height: 13px; }
+.place.soulevee { opacity: 0.35; }
+.place.interdite { opacity: 0.25; filter: grayscale(1); }
+.glisse .restaurer { opacity: 0; pointer-events: none; transform: translateY(24px); }
+.restaurer { transition: opacity .15s, transform .15s; }
+.bac-titre a { color: var(--creme-2); font-size: 12px; letter-spacing: 0.04em; text-transform: none; }
 .place .hors-theme { position: absolute; right: -14px; top: -14px; width: 10px; height: 10px; border-radius: 50%; background: #ff8a6a; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35); z-index: 1; }
 
 .mur-vide { display: grid; place-items: center; gap: 12px; padding: 26px 0 8px; }
@@ -331,6 +341,34 @@ input[type=range] { accent-color: var(--accent); }
 .oeuvre-toile { display: grid; place-items: center; background: var(--mur); border-radius: var(--rayon); overflow: hidden; padding: 26px 22px; }
 .oeuvre-toile canvas, .oeuvre-toile img { display: block; max-width: 100%; max-height: 58dvh; }
 .oeuvre-toile .cadre { max-width: 100%; }
+
+/* ---------- Collection ---------- */
+
+.recherche { display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; background: var(--carte); border: 1.5px solid var(--trait-fort); }
+.recherche .icone { color: var(--texte-3); }
+.recherche input { border: 0; background: none; min-height: 44px; padding: 0; outline: none; }
+.filtres { display: flex; gap: 6px; overflow-x: auto; padding: 12px 0 6px; scrollbar-width: none; }
+.filtres::-webkit-scrollbar { display: none; }
+.filtres .puce { border: 1.5px solid var(--trait); background: var(--carte); padding: 6px 12px; font-size: 13px; flex: none; }
+.filtres .puce.actif { background: var(--accent); color: var(--creme); border-color: transparent; }
+.collection { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; margin-top: 6px; }
+.oeuvre-ligne { display: grid; grid-template-columns: 84px 1fr; gap: 10px 12px; padding: 14px; border-top: 1px solid var(--trait); align-items: start; }
+.oeuvre-ligne:first-child { border-top: 0; }
+.oeuvre-miniature { width: 84px; height: 76px; flex: none; border: 0; border-radius: 10px; background: var(--mur); display: grid; place-items: center; padding: 0; }
+.oeuvre-texte { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.oeuvre-titre { all: unset; cursor: pointer; font-family: var(--titre); font-weight: 600; font-size: 16px; line-height: 1.2; }
+.etat-conservation { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--texte-2); }
+.etat-conservation .jauge { flex: 1; max-width: 120px; height: 4px; }
+.etat-conservation .jauge > i { background: var(--vert); }
+.etat-conservation.alerte { color: var(--rouge); font-weight: 600; }
+.etat-conservation.alerte .jauge > i { background: var(--rouge); }
+.actions-oeuvre { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.salle-choix {
+  display: grid; gap: 2px; text-align: left; padding: 14px 16px; border: 0; border-radius: var(--rayon);
+  background: var(--mur); color: var(--creme); font: inherit; cursor: pointer;
+}
+.salle-choix b { font-family: var(--titre); font-size: 17px; }
+.salle-choix span, .salle-choix small { color: var(--creme-2); font-size: 13px; }
 
 /* ---------- Atelier ---------- */
 

@@ -12,7 +12,10 @@ import { espacesOuverts, visiteursDuJour } from '../js/moteur/visiteurs.js';
 import { risques, protections, probabilites, tirages, enquete, peutEmprunter } from '../js/moteur/securite.js';
 import {
   deplacer, demarrerSession, terminerSession, embaucher, licencier, investir, lancerCampagne, coutCampagne, ouvrirExposition,
+  confierAtelier,
 } from '../js/moteur/actions.js';
+import { finirTravaux } from '../js/moteur/atelier.js';
+import { ramener, fermerJour } from '../js/moteur/journee.js';
 import { rolesOuverts } from '../js/moteur/personnel.js';
 import { avancer } from '../js/moteur/journee.js';
 
@@ -272,7 +275,9 @@ test('enquête : l\'œuvre retrouvée revient abîmée, sinon elle est perdue ap
   const retrouve = configEffective({ securite: { enquete: 1 } });
   enquete(retrouve, e, 20007);
   assert.equal(e.oeuvres[1].lieu, 'reserve');
-  assert.ok(Math.abs(e.oeuvres[1].progression - 0.8) < 1e-12);
+  // Elle revient usée, à réparer à l'atelier ; sa restauration reste acquise.
+  assert.equal(e.oeuvres[1].progression, 1);
+  assert.equal(e.oeuvres[1].usure, cfg.usure.retrouvee);
   const jamais = configEffective({ securite: { enquete: 0 } });
   e.oeuvres[2].lieu = 'volee';
   e.oeuvres[2].voleeLe = 20000;
@@ -341,4 +346,48 @@ test('un matériel qui ouvre un métier amène aussitôt un premier candidat', (
   assert.equal(c.role, 'operateur');
   assert.equal(c.expire, 20007);
   assert.ok(embaucher(cfg, r.etat, { candidat: c.id }, 20000).etat.personnel.employes.some((x) => x.role === 'operateur'));
+});
+
+/* ---------- Atelier ---------- */
+
+test('atelier : une œuvre usée est réparée en vrai temps et retrouve sa place, ravivée', () => {
+  let e = musee([{ id: 1, niveau: 2 }]);
+  e = accrocher(e, 1, 's1', 0);
+  e.oeuvres[1].usure = 0.5;
+  e.oeuvres[1].joursExpo = 200;
+  assert.throws(() => confierAtelier(cfg, e, { oeuvre: 1 }, 20000), /restaurateur/);
+  e.personnel.employes.push({ id: 'r', nom: 'R', role: 'assistant', minutes: 0, efficacite: 1, salaire: 1 });
+  const r = confierAtelier(cfg, e, { oeuvre: 1 }, 20000);
+  const o = r.etat.oeuvres[1];
+  assert.equal(o.lieu, 'atelier');
+  assert.equal(o.travaux.type, 'reparation');
+  // Remarquable : 1,5 × (0,5 + 1,5 × 0,5) / 0,9 = 2,08 → 3 jours.
+  assert.equal(o.travaux.fin - 20000, 3);
+  assert.throws(() => deplacer(cfg, r.etat, { oeuvre: 1, vers: { lieu: 'reserve' } }, 20001), /travaux/);
+  assert.deepEqual(finirTravaux(cfg, r.etat, 20002, ramener), []);
+  finirTravaux(cfg, r.etat, 20003, ramener);
+  assert.equal(o.lieu, 'espace');
+  assert.equal(o.espace, 's1');
+  assert.equal(o.usure, 0);
+  assert.ok(o.joursExpo < 200, 'ravivée : son attrait de nouveauté remonte');
+});
+
+test("usure : la foule use les œuvres exposées ; trop abîmée, une œuvre ne s'accroche plus", () => {
+  let e = musee([{ id: 1 }, { id: 2 }]);
+  e = accrocher(e, 1, 's1', 0);
+  for (let d = 20000; d < 20010; d++) fermerJour(cfg, e, d, null);
+  assert.ok(Math.abs(e.oeuvres[1].usure - 10 * cfg.usure.parJour) < 1e-9);
+  assert.equal(e.oeuvres[2].usure, undefined, "en réserve, rien ne s'use");
+  e.oeuvres[2].usure = cfg.usure.maxExposable;
+  assert.throws(() => accrocher(e, 2, 's1', 1), /abîmée/);
+});
+
+test("collection privée : à l'abri des cambrioleurs, et un repos qui ravive", () => {
+  let e = musee([{ id: 1, niveau: 3 }]);
+  e = accrocher(e, 1, 's1', 0);
+  e.oeuvres[1].joursExpo = 300;
+  e = deplacer(cfg, e, { oeuvre: 1, vers: { lieu: 'privee' } }, 20000).etat;
+  assert.equal(risques(cfg, e, 20000).nuit, 0);
+  e = deplacer(cfg, e, { oeuvre: 1, vers: { lieu: 'espace', espace: 's1', place: 0 } }, 20000 + cfg.atelier.reposPriveeJours).etat;
+  assert.ok(e.oeuvres[1].joursExpo < 300);
 });

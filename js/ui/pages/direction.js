@@ -3,7 +3,7 @@
 
 import { h, icone, nombre, grand, ajouter } from '../dom.js';
 import { jauge, portrait } from '../composants.js';
-import { compter, placesPubliques } from '../../moteur/batiment.js';
+import { placesPubliques } from '../../moteur/batiment.js';
 import { visiteursDuJour, effetCampagnes, espacesOuverts, coutVisiteur } from '../../moteur/visiteurs.js';
 import { risqueMaximal } from '../../moteur/securite.js';
 import { avecNiveaux, masseSalariale } from '../../moteur/personnel.js';
@@ -26,8 +26,7 @@ export async function afficher(app, vue) {
     h('div.entrees',
       entree('investir', 'Investissements', 'investir'),
       entree('expositions', 'Expositions et prêts', 'expositions', e.prets.demande ? 'Demande' : (e.expositions.courante ? 'En cours' : null)),
-      entree('reserve', 'Réserve', 'reserve', `${compter(e, 'reserve')}/${e.batiment.reserve.places}`),
-      entree('privee', 'Collection privée', 'privee', `${compter(e, 'privee')}/${e.batiment.privee.places}`),
+      entree('collection', 'Collection', 'reserve', `${Object.keys(e.oeuvres).length} œuvres`),
       entree('classement', 'Classement', 'classement', e.classement?.rang ? `${nombre(e.classement.rang)}e` : null),
       entree('rapport', 'Rapport', 'rapport'),
       entree('historique', 'Historique', 'historique'),

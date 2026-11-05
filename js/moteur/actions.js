@@ -12,7 +12,7 @@ import {
 } from './personnel.js';
 import {
   espace, contenuEspace, refusAccrochage, reserveLibre, priveeLibre, atelierLibre,
-  prixAile, prixSalle, prixAgrandissement, prixReserve, prixPrivee, aileDisponible,
+  prixAile, prixSalle, prixAgrandissement, prixReserve, prixPrivee, aileDisponible, prixAtelier,
 } from './batiment.js';
 import { tauxHoraire, visiteursDuJour } from './visiteurs.js';
 import { tableau } from './classement.js';
@@ -22,6 +22,7 @@ import { peutEmprunter, seuilEmprunt } from './securite.js';
 import { bonusReputation } from './journee.js';
 import { entrerDansLePublic, sortirDuPublic } from './lieux.js';
 import { chargesHoraires, ouvrirChantier, avancerChantiers } from './charges.js';
+import { meilleurRestaurateur, restaurateursLibres, typeTravaux, joursTravaux } from './atelier.js';
 
 export class ErreurJeu extends Error {
   constructor(message, code) {
@@ -112,8 +113,14 @@ export function deplacer(cfg, etat0, { oeuvre, vers }, jour) {
   if (o.lieu === 'volee') refuser('Œuvre volée', 'volee');
   if (o.lieu === 'exposition') refuser('Œuvre en exposition', 'exposition');
   if (etat.session?.oeuvre === o.id) refuser('Session en cours', 'session');
+  if (o.travaux) refuser('En travaux à l\'atelier', 'travaux');
   const depuis = { lieu: o.lieu, espace: o.espace, place: o.place };
   const etaitPublic = o.lieu === 'espace';
+  // Repos en collection privée : assez long, il rend de l'attrait de nouveauté.
+  if (depuis.lieu === 'privee' && vers.lieu !== 'privee') {
+    if (jour - (o.reposDepuis ?? jour) >= (cfg.atelier?.reposPriveeJours ?? Infinity)) o.ravivee = true;
+    delete o.reposDepuis;
+  }
 
   if (vers.lieu === 'atelier') {
     if (o.progression >= 1) refuser('Déjà restaurée');
@@ -150,6 +157,32 @@ export function deplacer(cfg, etat0, { oeuvre, vers }, jour) {
     refuser('Destination inconnue');
   }
   if (etaitPublic && o.lieu !== 'espace') sortirDuPublic(o, jour);
+  if (depuis.lieu !== 'privee' && o.lieu === 'privee') o.reposDepuis = jour;
+  return { etat };
+}
+
+/**
+ * Confie une œuvre restaurée à l'atelier : réparation si elle est usée,
+ * ravivage sinon. Il faut un emplacement et un restaurateur libres ; le
+ * travail dure des jours réels, puis l'œuvre retrouve sa place.
+ */
+export function confierAtelier(cfg, etat0, { oeuvre, restaurateur = null }, jour) {
+  const etat = copie(etat0);
+  const o = oeuvreDe(etat, oeuvre);
+  if (o.progression < 1) refuser('Restauration inachevée');
+  if (o.travaux) refuser('Déjà à l\'atelier');
+  if (!['espace', 'reserve', 'privee'].includes(o.lieu)) refuser('Œuvre indisponible');
+  if (atelierLibre(cfg, etat) <= 0) refuser('Atelier complet', 'atelier');
+  const choix = restaurateur
+    ? restaurateursLibres(cfg, etat).find((a) => a.id === restaurateur)
+    : meilleurRestaurateur(cfg, etat, o)?.a;
+  if (!choix) refuser('Aucun restaurateur libre', 'restaurateur');
+  const jours = joursTravaux(cfg, o, choix);
+  o.retour = o.lieu === 'espace' ? { lieu: 'espace', espace: o.espace, place: o.place } : { lieu: o.lieu };
+  if (o.lieu === 'espace') sortirDuPublic(o, jour);
+  delete o.reposDepuis;
+  poser(o, { lieu: 'atelier' });
+  o.travaux = { type: typeTravaux(cfg, o), par: choix.id, nom: choix.nom, debut: jour, fin: jour + jours };
   return { etat };
 }
 
@@ -206,6 +239,8 @@ export function catalogueInvestissements(cfg, etat) {
   ajouter({ id: 'salle', categorie: 'batiment', nom: 'Salle', prix: ps, refus: aileDisponible(cfg, etat) ? null : 'Toutes les ailes sont pleines' });
   ajouter({ id: 'reserve', categorie: 'batiment', nom: `Réserve +${cfg.batiment.reserve.places}`, prix: prixReserve(cfg, etat), refus: null });
   ajouter({ id: 'privee', categorie: 'batiment', nom: `Collection privée +${cfg.batiment.privee.places}`, prix: prixPrivee(cfg, etat), refus: null });
+  const pt = prixAtelier(cfg, etat);
+  ajouter({ id: 'atelier', categorie: 'atelier', nom: 'Atelier +1 emplacement', prix: pt, refus: pt === null ? 'Maximum atteint' : null });
 
   for (const type of ['cabinet', 'jardin', 'exposition']) {
     const e = cfg.espaces[type];
@@ -273,6 +308,12 @@ export function investir(cfg, etat0, { quoi }, jour = etat0.jourFerme + 1) {
     b.reserve.places += cfg.batiment.reserve.places;
     cle = `musee:reserve:${b.reserve.achats}`;
     motif = 'Réserve agrandie';
+  } else if (quoi === 'atelier') {
+    prix = prixAtelier(cfg, etat);
+    if (prix === null) refuser('Atelier au maximum');
+    b.atelier = { achats: (b.atelier?.achats || 0) + 1 };
+    cle = `musee:atelier:${b.atelier.achats}`;
+    motif = 'Atelier agrandi';
   } else if (quoi === 'privee') {
     prix = prixPrivee(cfg, etat);
     b.privee.achats += 1;
@@ -488,9 +529,10 @@ export function figerSession(cfg, etat, oeuvreId, jour) {
   // d'abord, tant qu'elle n'a pas atteint le plafond de préparation.
   const plafond = roleDe(cfg, 'assistant')?.plafond ?? 0;
   const aPreparer = Object.values(etat.oeuvres)
-    .filter((x) => x.lieu === 'atelier' && x.id !== o.id && x.progression < plafond)
+    .filter((x) => x.lieu === 'atelier' && x.id !== o.id && x.progression < plafond && !x.travaux)
     .sort((a, b) => b.progression - a.progression || a.id - b.id);
-  const assistants = ep.assistants.slice(0, aPreparer.length).map((a, i) => ({
+  const occupes = new Set(Object.values(etat.oeuvres).map((x) => x.travaux?.par).filter(Boolean));
+  const assistants = ep.assistants.filter((a) => !occupes.has(a.id)).slice(0, aPreparer.length).map((a, i) => ({
     employe: a.id, nom: a.nom, oeuvre: aPreparer[i].id, niveau: aPreparer[i].niveau,
     progression: aPreparer[i].progression, part: partAssistant(cfg, a.niveau, a.efficacite ?? 1),
   }));

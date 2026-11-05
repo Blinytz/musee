@@ -5,7 +5,8 @@ import { puceNiveau, jauge, tenter, sourceImage, confirmer, feuille, cartel, cad
 import { urlSecours } from '../../rendu/images.js';
 import { prestige, nouveaute, siecle, niveau } from '../../moteur/regles.js';
 import { detailVisiteurs } from '../../moteur/visiteurs.js';
-import { espacesPublics, contenuEspace, refusAccrochage } from '../../moteur/batiment.js';
+import { espacesPublics } from '../../moteur/batiment.js';
+import { actionsOeuvre, conservation, lieuTexte } from '../oeuvres.js';
 import { etape } from '../../rendu/restauration.js';
 import { zoomMax } from '../../rendu/images.js';
 
@@ -68,58 +69,30 @@ export async function afficher(app, vue, { params }) {
   );
 }
 
-function lieuTexte(e, cfg, o) {
-  switch (o.lieu) {
-    case 'espace': {
-      const sp = espacesPublics(e).find((x) => x.id === o.espace);
-      return sp?.nom || cfg.espaces[sp?.type]?.nom || o.espace;
-    }
-    case 'reserve': return 'Réserve';
-    case 'privee': return 'Collection privée';
-    case 'atelier': return 'Atelier';
-    case 'pret': return 'Prêtée';
-    case 'exposition': return 'Exposition temporaire';
-    default: return o.lieu;
-  }
-}
-
 function etatOeuvre(app, e, cfg, o) {
   const jour = app.jeu.jour();
   const fini = o.progression >= 1;
   const apport = detailVisiteurs(cfg, e, jour).parOeuvre.find((a) => a.id === o.id);
   const pret = o.lieu === 'pret' ? e.prets.enCours.find((p) => p.oeuvre === o.id) : null;
-  const deplacer = (vers) => app.agir('deplacer', { oeuvre: o.id, vers });
-  const premierePlace = () => {
-    for (const sp of espacesPublics(e)) {
-      if (refusAccrochage(cfg, e, o, sp.id)) continue;
-      const i = contenuEspace(e, sp.id).indexOf(null);
-      if (i >= 0) return { lieu: 'espace', espace: sp.id, place: i };
-    }
-    return null;
-  };
-  const boutons = [];
-  if (!['pret', 'exposition'].includes(o.lieu) && e.session?.oeuvre !== o.id) {
-    if (!fini && o.lieu !== 'atelier') boutons.push(h('button.bouton', { type: 'button', onclick: () => deplacer({ lieu: 'atelier' }) }, 'Atelier'));
-    if (fini && o.lieu !== 'espace') {
-      const place = premierePlace();
-      boutons.push(h('button.bouton.primaire', { type: 'button', disabled: !place, title: place ? '' : refusAccrochage(cfg, e, o, 's1') || 'Aucune place', onclick: () => deplacer(place) }, 'Salle'));
-    }
-    if (fini && o.lieu !== 'privee') boutons.push(h('button.bouton', { type: 'button', onclick: () => deplacer({ lieu: 'privee' }) }, 'Privée'));
-    if (o.lieu !== 'reserve') boutons.push(h('button.bouton', { type: 'button', onclick: () => deplacer({ lieu: 'reserve' }) }, 'Réserve'));
-  }
+  const etat = conservation(cfg, o);
+  const { boutons, raison } = actionsOeuvre(app, o);
 
   return h('div.pile', { style: { marginTop: '12px' } },
     h('div.carte.pile', { style: { gap: '8px' } },
-      h('div.ligne.espace', h('b', lieuTexte(e, cfg, o)),
-        pret ? h('span.tres-discret', `${pret.museeNom} · retour dans ${pret.fin - jour} j`) : null),
+      h('div.ligne.espace', h('b', lieuTexte(cfg, e, o)),
+        pret ? h('span.tres-discret', `${pret.museeNom} · retour dans ${pret.fin - jour} j`) : null,
+        o.travaux ? h('span.tres-discret', `${o.travaux.nom} · prête dans ${Math.max(0, o.travaux.fin - jour)} j`) : null),
       h('div.ligne.espace', h('span.discret', fini ? 'Restaurée' : etape(cfg.rendu, o.progression).nom), h('b.nombre', pourcent(o.progression, 1))),
       fini ? null : jauge(o.progression),
+      fini ? h('div.ligne.espace', h('span.discret', 'Conservation'),
+        h('span', { style: { color: etat.alerte ? 'var(--rouge)' : null } }, `${etat.mot} · ${Math.round(etat.part * 100)} %`)) : null,
       o.minutes ? h('div.ligne.espace', h('span.discret', 'Sessions'), h('span', duree(o.minutes))) : null,
       fini && (o.lieu === 'espace' || o.lieu === 'exposition')
         ? h('div.ligne.espace', h('span.discret', 'Nouveauté'), h('span', `×${nouveaute(cfg, o.joursExpo).toLocaleString('fr-FR', { maximumFractionDigits: 2 })}`)) : null,
       apport ? h('div.ligne.espace', h('span.discret', 'Visiteurs par jour'), h('span', nombre(apport.visiteurs))) : null,
       !fini ? h('div.ligne.espace', h('span.discret', 'Maîtrise requise'), h('span', `${niveau(cfg, o.niveau).maitrise}`)) : null),
     boutons.length ? h('div.rangee-boutons', boutons) : null,
+    raison ? h('div.tres-discret', raison) : null,
     imagePerso(app, o));
 }
 
