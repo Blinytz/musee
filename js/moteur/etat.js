@@ -51,7 +51,12 @@ export function creerEtat(cfg, { nom, jour, graine }) {
     campagne: null,
     prets: { demande: null, enCours: [], prevue: null, historique: [] },
     personnel: {
-      employes: (cfg.depart.personnel || []).map((p, i) => personne(cfg, { id: `e${jour}-d${i}`, role: p.role, niveau: p.niveau, graine: `${graine}:depart:${i}` })),
+      // L'équipe de départ est dans la moyenne : ni affaire, ni boulet.
+      employes: (cfg.depart.personnel || []).map((p, i) => ({
+        ...personne(cfg, { id: `e${jour}-d${i}`, role: p.role, niveau: p.niveau, graine: `${graine}:depart:${i}` }),
+        efficacite: 1,
+        salaire: 1,
+      })),
       candidats: [],
       arrieres: 0,
     },

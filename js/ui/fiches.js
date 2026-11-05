@@ -7,7 +7,7 @@ import { h, icone, nombre } from './dom.js';
 import { feuille, portrait, confirmer, cartel } from './composants.js';
 import { MENACES, risques, probabilites, chanceEnquete } from '../moteur/securite.js';
 import {
-  role, refusRole, minutesPourNiveau, niveauEmploye, salaireHoraire, fraisRecrutement,
+  role, refusRole, minutesPourNiveau, niveauEmploye, salaireHoraire, fraisRecrutement, efficacite,
   avecNiveaux, partAssistant, arrieresBloquants,
 } from '../moteur/personnel.js';
 import { visiteursDuJour, espacesOuverts, satisfaction, seuilDensite } from '../moteur/visiteurs.js';
@@ -117,7 +117,9 @@ const retrait = (id) => (etat) => { etat.investissements = (etat.investissements
 function aNiveau(cfg, p, niveau) {
   return (etat) => {
     etat.personnel.employes = etat.personnel.employes.filter((e) => e.id !== p.id);
-    etat.personnel.employes.push({ id: p.id || '__essai', nom: p.nom, role: p.role, minutes: minutesPourNiveau(cfg, niveau) });
+    etat.personnel.employes.push({
+      id: p.id || '__essai', nom: p.nom, role: p.role, minutes: minutesPourNiveau(cfg, niveau), efficacite: p.efficacite, salaire: p.salaire,
+    });
   };
 }
 
@@ -156,7 +158,7 @@ export function resumePersonne(app, p, { candidat = false } = {}) {
   const cfg = app.jeu.cfg;
   const niveau = candidat ? p.niveau : niveauEmploye(cfg, p.minutes);
   const liste = candidat ? ecarts(app, modifs.embauche(cfg, p)) : ecarts(app, depart(p.id)).map(inverse);
-  return court(liste) || effetsPropres(cfg, p.role, niveau).find(Boolean) || null;
+  return court(liste) || effetsPropres(cfg, p.role, niveau, efficacite(p)).find(Boolean) || null;
 }
 
 /** À quoi sert un métier, en une phrase. */
@@ -169,23 +171,54 @@ export const modifs = { embauche: (cfg, c) => aNiveau(cfg, { ...c, id: '__essai'
 /* ---------- Effets propres à un métier ---------- */
 
 /** Ce que les indicateurs ne montrent pas : travail, campagnes, arrivages… */
-function effetsPropres(cfg, id, niveau) {
+function effetsPropres(cfg, id, niveau, eff = 1) {
   const r = role(cfg, id) || {};
   const p = (x) => `${Math.round(x * 100)} %`;
+  const k = (base, parNiveau) => (base + parNiveau * niveau) * eff;
   switch (id) {
-    case 'assistant': return [`Avance une autre œuvre à ${p(partAssistant(cfg, niveau))} de ton rythme`, `Tous assistants réunis : ${p(r.plafond)} au plus`];
+    case 'assistant': return [`Avance une autre œuvre à ${p(partAssistant(cfg, niveau, eff))} de ton rythme`, `Tous assistants réunis : ${p(r.plafond)} au plus`];
     case 'communication': {
       const j = Math.floor(niveau / r.joursTousLes);
-      return [`Campagnes ${p(Math.min(0.9, r.remiseBase + r.remiseNiveau * niveau))} moins chères`, j ? `Campagnes prolongées de ${j} j` : null];
+      return [`Campagnes ${p(Math.min(0.9, k(r.remiseBase, r.remiseNiveau)))} moins chères`, j ? `Campagnes prolongées de ${j} j` : null];
     }
     case 'conservateur': return [`Arrivages : ${niveau >= 6 ? r.oeuvresNiveau6 : r.oeuvres} œuvre${(niveau >= 6 ? r.oeuvresNiveau6 : r.oeuvres) > 1 ? 's' : ''} de plus chaque lundi`];
-    case 'regisseur': return [`Demandes de prêt : +${p(r.probabilitePret)} de chances chaque semaine`, `Prêts payés ${p(r.remunerationBase + r.remunerationNiveau * niveau)} de plus`];
-    case 'commissaire': return [`Expositions : ${p(r.attraitBase + r.attraitNiveau * niveau)} de visiteurs en plus`, `Emprunts ${p(Math.min(0.9, r.remiseBase + r.remiseNiveau * niveau))} moins chers`];
-    case 'comptable': return [`Impôt ${p(Math.min(0.9, r.abattementBase + r.abattementNiveau * niveau))} plus bas`];
-    case 'technicien': return [`Matériel électronique ${p(r.materielBase + r.materielNiveau * niveau)} plus efficace`];
-    case 'chefSecurite': return [`Protection de toute l'équipe +${p(r.humainBase + r.humainNiveau * niveau)}`];
+    case 'regisseur': return [`Demandes de prêt : +${p(r.probabilitePret)} de chances chaque semaine`, `Prêts payés ${p(k(r.remunerationBase, r.remunerationNiveau))} de plus`];
+    case 'commissaire': return [`Expositions : ${p(k(r.attraitBase, r.attraitNiveau))} de visiteurs en plus`, `Emprunts ${p(Math.min(0.9, k(r.remiseBase, r.remiseNiveau)))} moins chers`];
+    case 'comptable': return [`Impôt ${p(Math.min(0.9, k(r.abattementBase, r.abattementNiveau)))} plus bas`];
+    case 'technicien': return [`Matériel électronique ${p(k(r.materielBase, r.materielNiveau))} plus efficace`];
+    case 'chefSecurite': return [`Protection de toute l'équipe +${p(k(r.humainBase, r.humainNiveau))}`];
     default: return [];
   }
+}
+
+/* ---------- Profils ---------- */
+
+/**
+ * Ce qui distingue une personne des autres du même niveau, en deux mots au
+ * plus : son efficacité, et ce qu'elle coûte pour ce qu'elle rend.
+ */
+export function profilCourt(p) {
+  if (p?.efficacite === undefined) return [];
+  const eff = efficacite(p);
+  const rapport = eff / (p.salaire ?? 1);
+  const mots = [];
+  if (eff >= 1.12) mots.push({ texte: 'Très efficace', bon: true });
+  else if (eff >= 1.05) mots.push({ texte: 'Efficace', bon: true });
+  else if (eff <= 0.88) mots.push({ texte: 'Peu efficace', bon: false });
+  if (rapport >= 1.12) mots.push({ texte: 'Bonne affaire', bon: true });
+  else if (rapport <= 0.89) mots.push({ texte: 'Salaire élevé', bon: false });
+  return mots;
+}
+
+/** Les lignes du profil, pour la fiche. */
+function lignesProfil(p) {
+  if (p?.efficacite === undefined) return [];
+  const ecart = Math.round(((p.salaire ?? 1) - 1) * 100);
+  return [
+    ligne(`Efficacité : ${Math.round(efficacite(p) * 100)} % de la moyenne du métier à ce niveau`),
+    ligne(ecart === 0 ? 'Salaire demandé : celui de la grille' : `Salaire demandé : ${Math.abs(ecart)} % ${ecart > 0 ? 'au-dessus' : 'au-dessous'} de la grille`),
+    profilCourt(p).length ? h('div.ligne', { style: { gap: '6px' } }, profilCourt(p).map((m) => h('span.puce', { classe: m.bon ? 'bon' : 'mauvais' }, m.texte))) : null,
+  ];
 }
 
 /** Ce qu'apporte chaque niveau, en clair, pour la fiche d'un métier. */
@@ -218,14 +251,14 @@ export function fichePersonne(app, p, { candidat = false } = {}) {
   const e = jeu.etat;
   const r = role(cfg, p.role);
   const niveau = candidat ? p.niveau : niveauEmploye(cfg, p.minutes);
-  const salaire = salaireHoraire(cfg, e, { role: p.role, niveau });
+  const salaire = salaireHoraire(cfg, e, { role: p.role, niveau, salaire: p.salaire });
   const apport = candidat
     ? ecarts(app, modifs.embauche(cfg, p))
     : ecarts(app, depart(p.id)).map(inverse);
   const suivant = niveau < cfg.personnel.niveauMax ? niveau + 1 : null;
   const auSuivant = !candidat && suivant ? ecarts(app, aNiveau(cfg, p, suivant)) : [];
   const resteH = suivant ? Math.max(0, Math.ceil((minutesPourNiveau(cfg, suivant) - p.minutes) / 60)) : 0;
-  const doublon = r?.unique && avecNiveaux(cfg, e).some((x) => x.role === p.role && x.id !== p.id && x.niveau >= niveau);
+  const doublon = r?.unique && avecNiveaux(cfg, e).some((x) => x.role === p.role && x.id !== p.id && x.niveau * efficacite(x) >= niveau * efficacite(p));
 
   let f = null;
   const actions = candidat
@@ -252,17 +285,18 @@ export function fichePersonne(app, p, { candidat = false } = {}) {
         h('b', r?.nom || p.role),
         h('div.tres-discret', `Niveau ${niveau}${candidat ? '' : ` · ${Math.floor(p.minutes / 60)} h de sessions`}`))),
       h('p.fiche-texte', ROLES[p.role] || ''),
+      bloc('Profil', lignesProfil(p)),
       bloc(candidat ? 'Si tu l\'embauches' : 'Son apport, sans → avec',
         lignesEcarts(apport),
-        effetsPropres(cfg, p.role, niveau).map(ligne),
+        effetsPropres(cfg, p.role, niveau, efficacite(p)).map(ligne),
         doublon ? ligne('Un autre membre de l\'équipe fait déjà mieux : sans effet tant qu\'il reste') : null,
-        !apport.length && !effetsPropres(cfg, p.role, niveau).length && !doublon ? ligne('Aucun effet mesurable aujourd\'hui') : null),
+        !apport.length && !effetsPropres(cfg, p.role, niveau, efficacite(p)).length && !doublon ? ligne('Aucun effet mesurable aujourd\'hui') : null),
       bloc('Coût',
         candidat ? ligne(`Embauche : ${nombre(fraisRecrutement(cfg, e, p))} ✦, une fois`) : null,
         ligne(`Salaire : ${decimale(salaire)} ✦ par heure de session, prélevé à la fin de chaque session, arrondi à l'Éclat près`)),
       !candidat && suivant ? bloc(`Niveau ${suivant} dans ${resteH} h de sessions`,
         lignesEcarts(auSuivant),
-        ligne(`Salaire : ${decimale(salaireHoraire(cfg, e, { role: p.role, niveau: suivant }))} ✦ par heure`)) : null,
+        ligne(`Salaire : ${decimale(salaireHoraire(cfg, e, { role: p.role, niveau: suivant, salaire: p.salaire }))} ✦ par heure`)) : null,
       bloc(null, parNiveau(cfg, r || {}).map(ligne))),
     actions: h('div', { style: { marginTop: '14px' } }, actions),
   });

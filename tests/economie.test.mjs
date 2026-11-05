@@ -6,7 +6,7 @@ import { configEffective } from '../js/config.js';
 import { creerEtat, migrer } from '../js/moteur/etat.js';
 import { impotHoraire, bilanFinancier } from '../js/moteur/regles.js';
 import {
-  salaireHoraire, niveauEmploye, tirerCandidats, effetsPersonnel, masseSalariale, fraisRecrutement,
+  salaireHoraire, niveauEmploye, tirerCandidats, effetsPersonnel, masseSalariale, fraisRecrutement, personne,
 } from '../js/moteur/personnel.js';
 import { espacesOuverts, visiteursDuJour } from '../js/moteur/visiteurs.js';
 import { risques, protections, probabilites, tirages, enquete, peutEmprunter } from '../js/moteur/securite.js';
@@ -114,6 +114,33 @@ test('candidats : reproductibles, métiers ouverts, niveaux plafonnés par le st
     assert.ok(c.niveau <= 2);
     assert.match(c.nom, /^\S+ \S+/);
   }
+});
+
+test('profils : deux candidats de même niveau ne se valent pas, en moyenne rien ne change', () => {
+  const p = cfg.personnel.profil;
+  const gens = Array.from({ length: 2000 }, (_, i) => personne(cfg, { id: `x${i}`, role: 'gardien', niveau: 2, graine: `essai:${i}` }));
+  assert.deepEqual(gens[7], personne(cfg, { id: 'x7', role: 'gardien', niveau: 2, graine: 'essai:7' }), 'reproductible');
+  const moyenne = (k) => gens.reduce((t, x) => t + x[k], 0) / gens.length;
+  assert.ok(Math.abs(moyenne('efficacite') - 1) < 0.02, `efficacité moyenne ${moyenne('efficacite')}`);
+  assert.ok(Math.abs(moyenne('salaire') - 1) < 0.02, `salaire moyen ${moyenne('salaire')}`);
+  for (const x of gens) {
+    assert.ok(x.efficacite >= p.efficaciteMin && x.efficacite <= p.efficaciteMax);
+    assert.ok(x.salaire >= p.salaireMin && x.salaire <= p.salaireMax);
+  }
+  // Des affaires et des salaires trop élevés, pas seulement des copies.
+  assert.ok(gens.some((x) => x.efficacite / x.salaire > 1.15) && gens.some((x) => x.efficacite / x.salaire < 0.87));
+  assert.ok(new Set(gens.map((x) => x.efficacite)).size > 30);
+});
+
+test("profils : l'efficacité règle l'apport, la prétention règle le salaire", () => {
+  const e = musee();
+  e.personnel.employes = [{ id: 'a', nom: 'a', role: 'veilleur', minutes: 0, efficacite: 1.2, salaire: 0.9 }];
+  e.statut = 1;
+  assert.ok(Math.abs(effetsPersonnel(cfg, e).menaces.nuit - 6 * 1.2) < 1e-9);
+  assert.ok(Math.abs(salaireHoraire(cfg, e, { role: 'veilleur', niveau: 1, salaire: 0.9 }) - 0.5 * 2 * 0.9) < 1e-9);
+  // Un employé d'avant les profils garde exactement ses chiffres.
+  e.personnel.employes = [{ id: 'b', nom: 'b', role: 'veilleur', minutes: 0 }];
+  assert.equal(effetsPersonnel(cfg, e).menaces.nuit, 6);
 });
 
 test('embauche : frais de recrutement, refus avec des arriérés ; licenciement libre', () => {

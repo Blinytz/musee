@@ -398,7 +398,10 @@ input[type=range] { accent-color: var(--accent); }
 .personne:first-child { border-top: 0; }
 .personne .portrait { width: 44px; height: 44px; }
 .personne-texte { flex: 1; min-width: 0; }
-.personne-texte b { display: block; }
+.personne-texte b { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.puce.bon { background: #dcebdc; color: var(--vert); }
+.puce.mauvais { background: #f3dcd5; color: var(--rouge); }
+.personne-texte b .puce, .fiche .puce { font-size: 11px; padding: 2px 8px; }
 .personne-texte small { display: block; color: var(--texte-2); font-size: 12px; }
 
 .menaces { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }

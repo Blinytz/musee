@@ -6,7 +6,7 @@ import { h, icone, nombre, ajouter } from '../dom.js';
 import { portrait } from '../composants.js';
 import { avecNiveaux, salaireHoraire, fraisRecrutement, masseSalariale, refusRole, arrieresBloquants } from '../../moteur/personnel.js';
 import { espacesOuverts } from '../../moteur/visiteurs.js';
-import { fichePersonne, ficheMetier, resumePersonne, resumeMetier } from '../fiches.js';
+import { fichePersonne, ficheMetier, resumePersonne, resumeMetier, profilCourt } from '../fiches.js';
 
 const decimale = (x) => x.toLocaleString('fr-FR', { maximumFractionDigits: x < 10 ? 1 : 0 });
 
@@ -82,7 +82,9 @@ function ligne(app, p, { sous, effet, droite, ouvrir }) {
     onkeydown: (ev) => { if (ev.key === 'Enter') ouvrir(); },
   },
   portrait(p.nom),
-  h('div.personne-texte', h('b', p.nom), h('small', sous),
+  h('div.personne-texte',
+    h('b', p.nom, profilCourt(p).map((m) => h('span.puce', { classe: m.bon ? 'bon' : 'mauvais' }, m.texte))),
+    h('small', sous),
     effet ? h('small.effet', effet) : h('small.tres-discret', resumeMetier(p.role))),
   droite);
 }

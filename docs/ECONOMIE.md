@@ -47,6 +47,15 @@ le font progresser (seuils : 10, 30, 70, 140, 250, 400, 600, 850, 1 150 h).
 La grille suit le rang de l'institution : 1, 2, 4, 10, 18, 25 de la galerie au
 musée universel. Un passage de statut revalorise toute l'équipe.
 
+**Profil** : deux personnes de même niveau ne se valent pas. Chacune a une
+efficacité, de 75 % à 125 % de la moyenne du métier (tirée en cloche), qui
+multiplie tout ce qu'elle apporte, et une prétention salariale de 75 % à
+130 % de la grille, qui suit l'efficacité pour 60 % avec un écart propre à
+chacun : il y a des affaires et des salaires trop élevés. Les moyennes
+valent 1 : l'équilibrage d'ensemble ne bouge pas. L'équipe de départ et les
+employés d'avant les profils sont dans la moyenne. Pour un métier « une
+seule tête », le meilleur est le plus fort : niveau × efficacité.
+
 **Recrutement** : chaque lundi, avec l'arrivage, cinq candidats tirés parmi
 les métiers ouverts, valables sept jours. Leur niveau est plafonné par le
 statut (2, 3, 4, 6, 8, 10). Embaucher coûte des frais de recrutement de

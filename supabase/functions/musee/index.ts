@@ -215,6 +215,12 @@ var CONFIG = {
     fraisRecrutementHeures: 10,
     // Au-delà de ce retard (en heures de masse salariale), on ne recrute plus.
     arrieresToleresHeures: 10,
+    // Deux personnes de même niveau ne se valent pas. Efficacité tirée en
+    // cloche entre min et max (moyenne 1), appliquée à tout ce qu'apporte la
+    // personne ; prétention salariale qui suit l'efficacité pour `suit`, plus
+    // un écart propre à chacun : il y a des affaires et des salaires trop
+    // élevés. Moyennes de 1 : l'équilibrage d'ensemble ne bouge pas.
+    profil: { efficaciteMin: 0.75, efficaciteMax: 1.25, suit: 0.6, ecart: 0.3, salaireMin: 0.75, salaireMax: 1.3 },
     roles: [
       // Sécurité. `menaces` : protection par niveau contre chaque menace ;
       // `equipement` : matériel sans lequel le métier n'existe pas.
@@ -742,6 +748,7 @@ function niveauEmploye(cfg, minutes) {
   });
   return Math.min(cfg.personnel.niveauMax, n);
 }
+var efficacite = (p) => p?.efficacite ?? 1;
 function employes(etat, roleId = null) {
   const liste = etat.personnel?.employes || [];
   return roleId ? liste.filter((e) => e.role === roleId) : liste;
@@ -752,7 +759,8 @@ function avecNiveaux(cfg, etat) {
 function effetsPersonnel(cfg, etat) {
   const equipe = avecNiveaux(cfg, etat);
   const de = (id) => equipe.filter((e2) => e2.role === id);
-  const meilleur = (id) => de(id).reduce((m, e2) => !m || e2.niveau > m.niveau ? e2 : m, null);
+  const force = (e2) => e2.niveau * efficacite(e2);
+  const meilleur = (id) => de(id).reduce((m, e2) => !m || force(e2) > force(m) ? e2 : m, null);
   const r = (id) => role(cfg, id) || {};
   const e = {
     gardiens: de("gardien").length,
@@ -769,25 +777,25 @@ function effetsPersonnel(cfg, etat) {
     abattement: 0
   };
   const chef = meilleur("chefSecurite");
-  const kChef = chef ? 1 + r("chefSecurite").humainBase + r("chefSecurite").humainNiveau * chef.niveau : 1;
+  const kChef = chef ? 1 + (r("chefSecurite").humainBase + r("chefSecurite").humainNiveau * chef.niveau) * efficacite(chef) : 1;
   for (const x of equipe) {
-    for (const [m, v] of Object.entries(r(x.role).menaces || {})) e.menaces[m] += v * x.niveau * kChef;
+    for (const [m, v] of Object.entries(r(x.role).menaces || {})) e.menaces[m] += v * x.niveau * efficacite(x) * kChef;
   }
   const tech = meilleur("technicien");
-  if (tech) e.technicien = r("technicien").materielBase + r("technicien").materielNiveau * tech.niveau;
+  if (tech) e.technicien = (r("technicien").materielBase + r("technicien").materielNiveau * tech.niveau) * efficacite(tech);
   const enq = meilleur("enqueteur");
-  if (enq) e.enquete += r("enqueteur").enqueteBase + r("enqueteur").enqueteNiveau * enq.niveau;
+  if (enq) e.enquete += (r("enqueteur").enqueteBase + r("enqueteur").enqueteNiveau * enq.niveau) * efficacite(enq);
   const med = r("mediateur");
   e.satisfaction = Math.min(
     med.plafondTotal ?? Infinity,
-    de("mediateur").reduce((s, x) => s + med.satisfactionBase + med.satisfactionNiveau * x.niveau, 0)
+    de("mediateur").reduce((s, x) => s + (med.satisfactionBase + med.satisfactionNiveau * x.niveau) * efficacite(x), 0)
   );
   const acc = r("accueil");
-  e.densite = de("accueil").reduce((s, x) => s + acc.densiteBase + acc.densiteNiveau * x.niveau, 0);
+  e.densite = de("accueil").reduce((s, x) => s + (acc.densiteBase + acc.densiteNiveau * x.niveau) * efficacite(x), 0);
   const com = meilleur("communication");
   if (com) {
     const c = r("communication");
-    e.communication = { remise: Math.min(0.9, c.remiseBase + c.remiseNiveau * com.niveau), jours: Math.floor(com.niveau / c.joursTousLes) };
+    e.communication = { remise: Math.min(0.9, (c.remiseBase + c.remiseNiveau * com.niveau) * efficacite(com)), jours: Math.floor(com.niveau / c.joursTousLes) };
   }
   const cons = meilleur("conservateur");
   if (cons) e.conservateur = cons.niveau >= 6 ? r("conservateur").oeuvresNiveau6 : r("conservateur").oeuvres;
@@ -796,29 +804,41 @@ function effetsPersonnel(cfg, etat) {
     const g = r("regisseur");
     e.regisseur = {
       probabilitePret: g.probabilitePret,
-      remuneration: g.remunerationBase + g.remunerationNiveau * reg.niveau,
-      enquete: g.enqueteBase + g.enqueteNiveau * reg.niveau
+      remuneration: (g.remunerationBase + g.remunerationNiveau * reg.niveau) * efficacite(reg),
+      enquete: (g.enqueteBase + g.enqueteNiveau * reg.niveau) * efficacite(reg)
     };
     e.enquete += e.regisseur.enquete;
   }
   const comm = meilleur("commissaire");
   if (comm) {
     const c = r("commissaire");
-    e.commissaire = { attrait: c.attraitBase + c.attraitNiveau * comm.niveau, remise: Math.min(0.9, c.remiseBase + c.remiseNiveau * comm.niveau) };
+    e.commissaire = {
+      attrait: (c.attraitBase + c.attraitNiveau * comm.niveau) * efficacite(comm),
+      remise: Math.min(0.9, (c.remiseBase + c.remiseNiveau * comm.niveau) * efficacite(comm))
+    };
   }
   const compta = meilleur("comptable");
   if (compta) {
     const c = r("comptable");
-    e.abattement = Math.min(0.9, c.abattementBase + c.abattementNiveau * compta.niveau);
+    e.abattement = Math.min(0.9, (c.abattementBase + c.abattementNiveau * compta.niveau) * efficacite(compta));
   }
   return e;
 }
 function nomTire(alea) {
   return `${PRENOMS[entier(PRENOMS.length, alea)]} ${NOMS[entier(NOMS.length, alea)]}`;
 }
+function profil(cfg, graine) {
+  const p = cfg.personnel.profil;
+  if (!p) return {};
+  const alea = generateur(`${graine}:profil`);
+  const cloche = (alea() + alea()) / 2;
+  const eff = p.efficaciteMin + (p.efficaciteMax - p.efficaciteMin) * cloche;
+  const salaire = Math.min(p.salaireMax, Math.max(p.salaireMin, 1 + p.suit * (eff - 1) + p.ecart * (alea() - 0.5)));
+  return { efficacite: Math.round(eff * 100) / 100, salaire: Math.round(salaire * 100) / 100 };
+}
 function personne(cfg, { id, role: r, niveau: niveau2, graine }) {
   const alea = generateur(`${graine}:nom`);
-  return { id, nom: nomTire(alea), role: r, niveau: niveau2, minutes: minutesPourNiveau(cfg, niveau2) };
+  return { id, nom: nomTire(alea), role: r, niveau: niveau2, minutes: minutesPourNiveau(cfg, niveau2), ...profil(cfg, graine) };
 }
 function tirerCandidats(cfg, etat, jour) {
   const p = cfg.personnel;

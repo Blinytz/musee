@@ -479,7 +479,7 @@ export function figerSession(cfg, etat, oeuvreId, jour) {
     .sort((a, b) => b.progression - a.progression || a.id - b.id);
   const assistants = ep.assistants.slice(0, aPreparer.length).map((a, i) => ({
     employe: a.id, nom: a.nom, oeuvre: aPreparer[i].id, niveau: aPreparer[i].niveau,
-    progression: aPreparer[i].progression, part: partAssistant(cfg, a.niveau),
+    progression: aPreparer[i].progression, part: partAssistant(cfg, a.niveau, a.efficacite ?? 1),
   }));
   return {
     support: o.support,

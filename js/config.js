@@ -237,6 +237,12 @@ export const CONFIG = {
     fraisRecrutementHeures: 10,
     // Au-delà de ce retard (en heures de masse salariale), on ne recrute plus.
     arrieresToleresHeures: 10,
+    // Deux personnes de même niveau ne se valent pas. Efficacité tirée en
+    // cloche entre min et max (moyenne 1), appliquée à tout ce qu'apporte la
+    // personne ; prétention salariale qui suit l'efficacité pour `suit`, plus
+    // un écart propre à chacun : il y a des affaires et des salaires trop
+    // élevés. Moyennes de 1 : l'équilibrage d'ensemble ne bouge pas.
+    profil: { efficaciteMin: 0.75, efficaciteMax: 1.25, suit: 0.6, ecart: 0.3, salaireMin: 0.75, salaireMax: 1.3 },
     roles: [
       // Sécurité. `menaces` : protection par niveau contre chaque menace ;
       // `equipement` : matériel sans lequel le métier n'existe pas.
