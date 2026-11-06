@@ -1,5 +1,8 @@
-/* Musée : le Salon. Murs de couleur par salle, cadres dorés, plaques de
-   laiton ; la gestion se fait sur papier crème, à l'encre et au bordeaux. */
+/* Musée : le Salon en relief. Murs de couleur par salle, cadres dorés,
+   plaques de laiton bombées, cartes posées sur le papier crème. Le soir,
+   l'ambiance Nocturne (data-ambiance="nuit") éteint la salle : murs sombres,
+   panneaux fumés, laiton qui luit. Le plan du musée est une maquette posée
+   sur une table d'architecte. */
 
 [hidden] { display: none !important; }
 
@@ -47,11 +50,56 @@
   --haut: env(safe-area-inset-top, 0px);
   --bas: env(safe-area-inset-bottom, 0px);
   --ombre-cadre: 0 14px 24px rgba(20, 0, 0, 0.45);
+  --fond-page: radial-gradient(120% 55% at 50% 0%, #fcf5e8 0%, #f3e6cf 55%, #eadbc0 100%);
+  --ombre-carte: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 2px rgba(60, 30, 10, 0.08), 0 12px 26px -16px rgba(60, 30, 10, 0.4);
+  --ombre-haute: 0 18px 36px -14px rgba(60, 30, 10, 0.55);
+  --verre: rgba(255, 250, 242, 0.82);
+  --verre-bord: rgba(255, 255, 255, 0.7);
+  --lien: var(--accent);
+  --jauge: var(--accent);
+  --laiton-degrade: linear-gradient(180deg, #f3dc95 0%, #c9a24f 60%, #a8822f 100%);
+  --accent-degrade: linear-gradient(180deg, #7d2a30 0%, #551a1f 100%);
+  --table: #ece2cf;
+  --table-trait: rgba(94, 29, 34, 0.06);
+  --annonce: #2b1a14;
   color-scheme: light;
+}
+
+/* Nocturne : le Salon après la fermeture. */
+:root[data-ambiance="nuit"] {
+  --fond: #140a0c;
+  --fond-2: #1b0e11;
+  --fond-page: radial-gradient(80% 40% at 50% 0%, rgba(138, 42, 51, 0.32) 0%, rgba(20, 10, 12, 0) 80%), linear-gradient(180deg, #1d0c0f 0%, #140a0c 60%, #0d0708 100%);
+  --carte: #221316;
+  --carte-2: #2c191d;
+  --carte-3: #3a2428;
+  --trait: rgba(255, 240, 225, 0.09);
+  --trait-fort: rgba(255, 240, 225, 0.2);
+  --texte: #f3e6d3;
+  --texte-2: #c4ae9c;
+  --texte-3: #93806f;
+  --accent: #9b2f38;
+  --accent-clair: #b23a44;
+  --accent-sombre: #3a1a1e;
+  --lien: #e8c77a;
+  --jauge: #e6c878;
+  --or: #e6c878;
+  --vert: #7fd19a;
+  --rouge: #ef7a62;
+  --accent-degrade: linear-gradient(180deg, #a5343e 0%, #6e2229 100%);
+  --ombre-carte: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 30px -16px rgba(0, 0, 0, 0.85);
+  --ombre-haute: 0 20px 40px -12px rgba(0, 0, 0, 0.85);
+  --verre: rgba(30, 14, 17, 0.74);
+  --verre-bord: rgba(255, 240, 225, 0.1);
+  --table: #1a1012;
+  --table-trait: rgba(243, 220, 149, 0.05);
+  --annonce: #3a2428;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--fond); color: var(--texte); }
+body { background: var(--fond-page), var(--fond); background-attachment: fixed; }
 /* Pas de zoom au double appui : un double appui sur un bouton zoomait la page. */
 html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 body {
@@ -60,10 +108,9 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
 }
-body[data-route="musee"] { background: #2a1d17; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-a { color: var(--accent); }
+a { color: var(--lien); }
 h1, h2, h3 { font-family: var(--titre); font-weight: 600; margin: 0; letter-spacing: -0.005em; font-variant-numeric: lining-nums; }
 h1 { font-size: 28px; line-height: 1.1; }
 h2 { font-size: 22px; line-height: 1.15; }
@@ -76,19 +123,24 @@ h3 { font-size: 18px; line-height: 1.2; }
 #entete {
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 12px;
-  padding: calc(var(--haut) + 14px) 18px 12px;
-  background: var(--fond);
+  padding: calc(var(--haut) + 12px) 18px 10px;
+  background: var(--verre);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--trait);
   color: var(--texte);
 }
-body[data-route="musee"] #entete { background: var(--mur-entete, var(--mur)); color: var(--creme); }
 .entete-nom { flex: 1; min-width: 0; display: block; color: inherit; text-decoration: none; }
 .entete-nom h1 { font-size: 25px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.entete-statut { font-size: 12px; color: var(--texte-2); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-body[data-route="musee"] .entete-statut { color: var(--creme-2); }
+.entete-statut { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--texte-2); margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.statut-plaque {
+  background: var(--laiton-degrade); color: var(--laiton-texte); font-weight: 700; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 5px; box-shadow: inset 0 1px 0 rgba(255, 250, 220, 0.8), 0 1px 2px rgba(90, 60, 10, 0.35);
+}
 .solde {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 13px; border-radius: 999px; border: 0;
-  background: var(--accent); color: var(--creme);
+  background: var(--accent-degrade); color: var(--creme);
+  box-shadow: inset 0 1px 0 rgba(255, 200, 190, 0.35), 0 6px 16px -6px rgba(94, 29, 34, 0.7);
   font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .solde::before { content: '✦'; }
@@ -98,31 +150,39 @@ body[data-route="musee"] .entete-statut { color: var(--creme-2); }
   background: transparent; color: inherit; font-size: 13px; font-weight: 600; white-space: nowrap;
 }
 .installer-entete .icone { width: 16px; height: 16px; }
-body[data-route="musee"] .solde { background: var(--creme); color: var(--mur-entete, var(--mur)); }
 
-main { max-width: 680px; margin: 0 auto; padding: 4px 16px calc(var(--bas) + 100px); }
-body[data-route="musee"] main { max-width: none; padding: 0 0 calc(var(--bas) + 190px); }
-.accrochage, .mur-pied, .bac-titre { max-width: 680px; margin-left: auto; margin-right: auto; }
+main { max-width: 680px; margin: 0 auto; padding: 4px 16px calc(var(--bas) + 112px); }
+body[data-route="visite"] main { padding-bottom: calc(var(--bas) + 230px); }
 
+/* Barre flottante en verre ; l'Atelier, au centre, est un bouton rond. */
 #navigation {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  padding: 6px 6px calc(var(--bas) + 8px);
-  background: var(--creme);
-  box-shadow: 0 -1px 0 var(--trait), 0 -10px 30px rgba(40, 10, 5, 0.08);
+  position: fixed; left: 12px; right: 12px; bottom: calc(var(--bas) + 12px); z-index: 30;
+  max-width: 560px; margin: 0 auto; height: 66px;
+  display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
+  border-radius: 26px; background: var(--verre);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  border: 1px solid var(--verre-bord);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 14px 34px -10px rgba(40, 15, 5, 0.5);
 }
 #navigation a {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 7px 0 5px; border-radius: 12px;
-  color: #8a7466; text-decoration: none; font-size: 11px; font-weight: 500;
+  color: var(--texte-3); text-decoration: none; font-size: 11px; font-weight: 600;
   position: relative;
 }
-#navigation a .icone { width: 26px; height: 26px; }
-#navigation a.actif { color: var(--accent); font-weight: 600; }
+#navigation a .icone { width: 24px; height: 24px; }
+#navigation a.actif { color: var(--lien); }
+#navigation a.centre { margin-top: -30px; }
+.centre-rond {
+  width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center;
+  color: #f1d891; background: var(--accent-degrade);
+  box-shadow: 0 0 0 4px var(--fond), 0 12px 22px -6px rgba(94, 29, 34, 0.8), inset 0 1px 0 rgba(255, 200, 190, 0.4);
+}
+#navigation a.centre .icone { width: 27px; height: 27px; }
+#navigation a.centre.actif .centre-rond { color: #3b2a0a; background: var(--laiton-degrade); }
 .pastille {
-  position: absolute; top: 3px; left: calc(50% + 6px);
+  position: absolute; top: -4px; left: calc(50% + 6px);
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  background: var(--accent); color: var(--creme); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center;
+  background: var(--rouge); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
 }
 
 /* ---------- Briques ---------- */
@@ -133,8 +193,8 @@ body[data-route="musee"] main { max-width: none; padding: 0 0 calc(var(--bas) + 
 
 .carte {
   background: var(--carte); border: 1px solid var(--trait);
-  border-radius: var(--rayon); padding: 14px;
-  box-shadow: 0 1px 2px rgba(60, 30, 10, 0.05);
+  border-radius: 20px; padding: 14px;
+  box-shadow: var(--ombre-carte);
 }
 .carte + .carte { margin-top: 10px; }
 .pile { display: grid; gap: 10px; }
@@ -150,16 +210,17 @@ body[data-route="musee"] main { max-width: none; padding: 0 0 calc(var(--bas) + 
 
 .bouton {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 46px; padding: 0 20px; border-radius: 999px;
-  border: 1.5px solid var(--trait-fort); background: var(--carte);
+  min-height: 46px; padding: 0 20px; border-radius: 14px;
+  border: 1px solid var(--trait-fort); background: var(--carte);
   color: var(--texte); text-decoration: none;
   font-weight: 600; white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 4px 10px -6px rgba(60, 30, 10, 0.4);
   transition: transform .08s, background .15s;
 }
 .bouton:active { transform: scale(0.97); }
 .bouton:disabled { opacity: 0.4; cursor: default; transform: none; }
-.bouton.primaire { background: var(--accent); color: var(--creme); border-color: transparent; }
-.bouton.or { background: var(--laiton); color: var(--laiton-texte); border-color: transparent; }
+.bouton.primaire { background: var(--accent-degrade); color: var(--creme); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 200, 190, 0.35), 0 8px 18px -8px rgba(94, 29, 34, 0.75); }
+.bouton.or { background: var(--laiton-degrade); color: var(--laiton-texte); border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 250, 220, 0.9), 0 8px 18px -8px rgba(138, 106, 31, 0.7); }
 .bouton.danger { color: var(--rouge); border-color: rgba(179, 54, 31, 0.35); }
 .bouton.plein { width: 100%; }
 .bouton.petit { min-height: 36px; padding: 0 14px; font-size: 13px; }
@@ -183,8 +244,8 @@ body[data-route="musee"] main { max-width: none; padding: 0 0 calc(var(--bas) + 
 .niveau-5 { background: var(--n5); }
 
 .jauge { height: 5px; border-radius: 3px; background: var(--carte-3); overflow: hidden; }
-.jauge > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
-.jauge.or > i { background: var(--laiton); }
+.jauge > i { display: block; height: 100%; background: var(--jauge); border-radius: 3px; }
+.jauge.or > i { background: linear-gradient(90deg, #a8822f, #e6c878); }
 
 .champ { display: grid; gap: 6px; }
 .champ > span { font-size: 13px; color: var(--texte-2); }
@@ -197,14 +258,14 @@ input[type=range] { accent-color: var(--accent); }
 
 .onglets { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--carte-2); }
 .onglets button { flex: 1; min-height: 36px; border: 0; border-radius: 999px; background: none; color: var(--texte-2); font-weight: 600; font-size: 13px; }
-.onglets button.actif { background: var(--carte); color: var(--accent); box-shadow: 0 1px 3px rgba(60, 30, 10, 0.12); }
+.onglets button.actif { background: var(--carte); color: var(--lien); box-shadow: 0 1px 3px rgba(60, 30, 10, 0.18); }
 
 .vide { padding: 28px 12px; text-align: center; color: var(--texte-3); }
 
 /* ---------- Chiffres ---------- */
 
 .chiffres { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.chiffre { background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px 14px; }
+.chiffre { background: var(--carte); border: 1px solid var(--trait); border-radius: 18px; padding: 12px 14px; box-shadow: var(--ombre-carte); }
 .chiffre b { display: block; font-family: var(--titre); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; line-height: 1.2; white-space: nowrap; }
 .chiffre span { font-size: 12px; color: var(--texte-2); display: flex; align-items: center; gap: 5px; }
 .chiffre small { font-size: 12px; color: var(--texte-3); }
@@ -239,7 +300,7 @@ input[type=range] { accent-color: var(--accent); }
 
 .plaque {
   display: inline-grid; gap: 1px; justify-items: center;
-  background: linear-gradient(180deg, #dcb866, #c9a24f 45%, #b38a3a);
+  background: linear-gradient(180deg, #f1d891 0%, #c9a24f 55%, #a8822f 100%);
   color: var(--laiton-texte); padding: 6px 14px 7px; border-radius: 3px; border: 0;
   box-shadow: 0 0 0 1px rgba(60, 40, 10, 0.35) inset, 0 3px 6px rgba(20, 0, 0, 0.35);
   font-family: var(--titre); font-size: 14px; font-weight: 600; line-height: 1.2; text-align: center;
@@ -326,8 +387,8 @@ input[type=range] { accent-color: var(--accent); }
 .grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .vignette {
   position: relative; display: block; width: 100%; padding: 0; text-align: left;
-  background: var(--carte); border-radius: var(--rayon); overflow: hidden;
-  border: 1px solid var(--trait); color: inherit;
+  background: var(--carte); border-radius: 18px; overflow: hidden;
+  border: 1px solid var(--trait); color: inherit; box-shadow: var(--ombre-carte);
 }
 .vignette .toile { position: relative; aspect-ratio: 4 / 5; background: var(--mur); display: grid; place-items: center; overflow: hidden; padding: 22px 20px; container-type: size; }
 .cadre.fluide { aspect-ratio: var(--r); width: min(100cqw, calc(100cqh * var(--r))); height: auto; }
@@ -351,7 +412,7 @@ input[type=range] { accent-color: var(--accent); }
 .filtres::-webkit-scrollbar { display: none; }
 .filtres .puce { border: 1.5px solid var(--trait); background: var(--carte); padding: 6px 12px; font-size: 13px; flex: none; }
 .filtres .puce.actif { background: var(--accent); color: var(--creme); border-color: transparent; }
-.collection { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; margin-top: 6px; }
+.collection { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: 20px; overflow: hidden; margin-top: 6px; box-shadow: var(--ombre-carte); }
 .oeuvre-ligne { display: grid; grid-template-columns: 84px 1fr; gap: 10px 12px; padding: 14px; border-top: 1px solid var(--trait); align-items: start; }
 .oeuvre-ligne:first-child { border-top: 0; }
 .oeuvre-miniature { width: 84px; height: 76px; flex: none; border: 0; border-radius: 10px; background: var(--mur); display: grid; place-items: center; padding: 0; }
@@ -372,7 +433,7 @@ input[type=range] { accent-color: var(--accent); }
 
 /* ---------- Atelier ---------- */
 
-.chevalet { border-radius: var(--rayon); overflow: hidden; background: var(--carte); border: 1px solid var(--trait); }
+.chevalet { border-radius: 22px; overflow: hidden; background: var(--carte); border: 1px solid var(--trait); box-shadow: var(--ombre-carte); }
 .chevalet-toile { width: 100%; border: 0; color: inherit; background: var(--mur); display: grid; place-items: center; padding: 34px 28px 20px; gap: 24px; }
 .chevalet-toile .cadre { max-width: 100%; }
 .chevalet-toile canvas, .chevalet-toile img { max-height: 46dvh; max-width: 100%; }
@@ -424,10 +485,10 @@ input[type=range] { accent-color: var(--accent); }
 .annonce-statut .plaque { font-size: 26px; }
 .statut-nom { font-family: var(--titre); font-weight: 600; line-height: 1.05; font-variant-numeric: lining-nums; }
 
-.entrees { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; }
+.entrees { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: 20px; overflow: hidden; box-shadow: var(--ombre-carte); }
 .entree { display: flex; align-items: center; gap: 12px; padding: 14px 16px; color: inherit; text-decoration: none; border-top: 1px solid var(--trait); }
 .entree:first-child { border-top: 0; }
-.entree > .icone { color: var(--accent); width: 22px; height: 22px; }
+.entree > .icone { color: var(--lien); width: 22px; height: 22px; }
 .entree > span:not(.puce) { flex: 1; font-weight: 500; }
 .entree > .icone:last-child { color: var(--texte-3); width: 16px; height: 16px; }
 
@@ -436,14 +497,14 @@ input[type=range] { accent-color: var(--accent); }
 .entree small.effet, .personne-texte .effet { color: var(--vert); font-weight: 600; }
 .entree small.alerte { color: var(--rouge); font-weight: 600; }
 
-.personnes { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; }
+.personnes { display: grid; background: var(--carte); border: 1px solid var(--trait); border-radius: 20px; overflow: hidden; box-shadow: var(--ombre-carte); }
 .personne { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--trait); cursor: pointer; }
 .personne:first-child { border-top: 0; }
 .personne .portrait { width: 44px; height: 44px; }
 .personne-texte { flex: 1; min-width: 0; }
 .personne-texte b { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
-.puce.bon { background: #dcebdc; color: var(--vert); }
-.puce.mauvais { background: #f3dcd5; color: var(--rouge); }
+.puce.bon { background: color-mix(in srgb, var(--vert) 16%, transparent); color: var(--vert); }
+.puce.mauvais { background: color-mix(in srgb, var(--rouge) 16%, transparent); color: var(--rouge); }
 .personne-texte b .puce, .fiche .puce { font-size: 11px; padding: 2px 8px; }
 .personne-texte small { display: block; color: var(--texte-2); font-size: 12px; }
 
@@ -465,7 +526,7 @@ input[type=range] { accent-color: var(--accent); }
 .entree .equipe-portraits .portrait { width: 30px; height: 30px; }
 .menace {
   display: grid; gap: 6px; align-content: start; text-align: left; padding: 12px; color: inherit;
-  background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); font: inherit; cursor: pointer;
+  background: var(--carte); border: 1px solid var(--trait); border-radius: 18px; font: inherit; cursor: pointer; box-shadow: var(--ombre-carte);
 }
 .menace b { font-size: 13px; line-height: 1.2; min-height: 2.4em; }
 .menace-valeur { font-family: var(--titre); font-size: 24px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }
@@ -476,7 +537,7 @@ input[type=range] { accent-color: var(--accent); }
 .fiche-tete b { font-size: 16px; }
 .portrait.grand { width: 64px; height: 64px; }
 .fiche-texte { margin: 0; color: var(--texte); line-height: 1.5; }
-.fiche-bloc { display: grid; gap: 6px; background: var(--carte); border: 1px solid var(--trait); border-radius: var(--rayon); padding: 12px 14px; }
+.fiche-bloc { display: grid; gap: 6px; background: var(--carte); border: 1px solid var(--trait); border-radius: 18px; padding: 12px 14px; box-shadow: var(--ombre-carte); }
 .fiche-legende { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-3); font-weight: 600; }
 .fiche-ligne { font-size: 14px; }
 .fiche-ecart { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
@@ -516,11 +577,11 @@ input[type=range] { accent-color: var(--accent); }
 
 /* ---------- Feuilles et modales ---------- */
 
-.voile-fond { position: fixed; inset: 0; z-index: 60; background: rgba(30, 10, 8, 0.5); display: flex; align-items: flex-end; justify-content: center; animation: apparait .15s ease-out; }
+.voile-fond { position: fixed; inset: 0; z-index: 60; background: rgba(30, 10, 8, 0.5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center; animation: apparait .15s ease-out; }
 .feuille {
   width: 100%; max-width: 680px; max-height: 92dvh; overflow-y: auto;
-  background: var(--fond); color: var(--texte);
-  border-radius: 24px 24px 0 0; padding: 10px 18px calc(var(--bas) + 20px);
+  background: var(--fond-page), var(--fond); color: var(--texte);
+  border-radius: 28px 28px 0 0; padding: 10px 18px calc(var(--bas) + 20px);
   animation: monte .2s ease-out; box-shadow: 0 -10px 40px rgba(30, 10, 8, 0.3);
 }
 .feuille-poignee { width: 40px; height: 4px; border-radius: 2px; background: var(--carte-3); margin: 0 auto 12px; }
@@ -530,8 +591,8 @@ input[type=range] { accent-color: var(--accent); }
 @keyframes apparait { from { opacity: 0; } }
 @keyframes monte { from { transform: translateY(30px); opacity: 0; } }
 
-#annonces { position: fixed; left: 0; right: 0; bottom: calc(var(--bas) + 90px); z-index: 90; display: grid; justify-items: center; gap: 6px; pointer-events: none; padding: 0 16px; }
-.annonce { background: var(--texte); color: var(--creme); padding: 11px 16px; border-radius: 14px; max-width: 520px; box-shadow: 0 8px 24px rgba(30, 10, 8, 0.35); animation: monte .2s ease-out; font-weight: 500; }
+#annonces { position: fixed; left: 0; right: 0; bottom: calc(var(--bas) + 96px); z-index: 90; display: grid; justify-items: center; gap: 6px; pointer-events: none; padding: 0 16px; }
+.annonce { background: var(--annonce); color: #f6ecd9; border: 1px solid var(--trait); padding: 11px 16px; border-radius: 14px; max-width: 520px; box-shadow: 0 8px 24px rgba(30, 10, 8, 0.35); animation: monte .2s ease-out; font-weight: 500; }
 .annonce.erreur { background: var(--rouge); color: #fff; }
 
 /* ---------- Session ---------- */
@@ -554,13 +615,13 @@ input[type=range] { accent-color: var(--accent); }
 .session-plaque .plaque { padding: 8px 26px 10px; }
 .compte { font-family: var(--titre); font-size: 46px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }
 .session-pied {
-  background: var(--creme); color: var(--texte); border-radius: 26px 26px 0 0;
+  background: var(--fond); color: var(--texte); border-radius: 26px 26px 0 0;
   padding: 20px 22px calc(var(--bas) + 22px); display: grid; gap: 16px;
 }
 .session-pied .chiffres-session { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .session-pied .chiffres-session b { display: block; font-family: var(--titre); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
 .session-pied .chiffres-session span { font-size: 12px; color: var(--texte-2); }
-.session-pied .bouton { border-color: var(--accent); color: var(--accent); background: transparent; }
+.session-pied .bouton { border-color: var(--lien); color: var(--lien); background: transparent; }
 .session-pied .bouton.primaire { background: var(--accent); color: var(--creme); }
 #session.en-pause .compte { opacity: 0.5; }
 #session.en-pause .session-toile canvas { filter: saturate(0.6) brightness(0.85); transition: filter 0.3s; }
@@ -609,8 +670,304 @@ input[type=range] { accent-color: var(--accent); }
 .interrupteur input { width: 44px; height: 26px; accent-color: var(--accent); }
 .installer { margin-bottom: 12px; }
 
+/* ---------- Plan : la maquette ---------- */
+
+.modes-plan { margin-top: 10px; }
+.modes-plan button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.modes-plan .icone { width: 17px; height: 17px; }
+
+.maquette {
+  position: relative; margin: 10px -16px 0; overflow: hidden;
+  background-color: var(--table);
+  background-image: linear-gradient(var(--table-trait) 1px, transparent 1px), linear-gradient(90deg, var(--table-trait) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border-top: 1px solid var(--trait); border-bottom: 1px solid var(--trait);
+  --dalle: #d8cab0; --dalle-1: #bba887; --dalle-2: #ad9a79; --dalle-3: #a08c6d;
+  --bois: repeating-linear-gradient(0deg, #c49766 0 7px, #b3875a 7px 8px);
+  --planches: repeating-linear-gradient(90deg, #a37a4e 0 9px, #96704a 9px 10px);
+  --clair: repeating-linear-gradient(0deg, #e2d2b4 0 7px, #d6c4a3 7px 8px);
+  --herbe: radial-gradient(circle at 30% 30%, #7aa070 0 6px, transparent 7px), radial-gradient(circle at 70% 65%, #6d9564 0 7px, transparent 8px), #8fb07f;
+  --marbre: repeating-conic-gradient(#efe4cf 0 25%, #e2d4ba 0 50%) 0 0 / 16px 16px;
+  --beton: #a7a29a;
+  --sombre: #3a302c;
+  --pelouse: #b9c89c; --pelouse-bord: rgba(60, 90, 50, 0.45);
+  --feuillage: radial-gradient(circle at 36% 34%, #b4d79c 0, #77a364 52%, #4f7a43 100%);
+  --arbre-1: #4f7a43; --arbre-2: #6f9b5c; --arbre-3: #9cc58a;
+  --lumiere-sol: rgba(255, 236, 196, 0.16);
+}
+:root[data-ambiance="nuit"] .maquette {
+  --dalle: #3a2c27; --dalle-1: #2c211d; --dalle-2: #241a17; --dalle-3: #1c1412;
+  --bois: repeating-linear-gradient(0deg, #8a6440 0 7px, #7a5636 7px 8px);
+  --planches: repeating-linear-gradient(90deg, #74563a 0 9px, #694d33 9px 10px);
+  --clair: repeating-linear-gradient(0deg, #a8977c 0 7px, #9c8b70 7px 8px);
+  --herbe: radial-gradient(circle at 30% 30%, #4d6a46 0 6px, transparent 7px), radial-gradient(circle at 70% 65%, #44603e 0 7px, transparent 8px), #5b7a51;
+  --marbre: repeating-conic-gradient(#b8ab94 0 25%, #a89b84 0 50%) 0 0 / 16px 16px;
+  --beton: #6f6a63;
+  --sombre: #221a17;
+  --pelouse: #3d4a32; --pelouse-bord: rgba(160, 190, 140, 0.25);
+  --feuillage: radial-gradient(circle at 36% 34%, #5d7f4f 0, #3d5a33 55%, #26391f 100%);
+  --arbre-1: #22341c; --arbre-2: #31492a; --arbre-3: #476a3c;
+  --lumiere-sol: rgba(255, 210, 140, 0.34);
+}
+.maquette-ombre { position: absolute; border-radius: 50%; background: radial-gradient(closest-side, rgba(40, 25, 10, 0.32), rgba(40, 25, 10, 0)); pointer-events: none; }
+.plateau {
+  position: absolute; transform-style: preserve-3d; transform-origin: 50% 50%;
+  background: var(--dalle); border-radius: 4px;
+  box-shadow: -2px 2px 0 var(--dalle-1), -4px 4px 0 var(--dalle-1), -6px 6px 0 var(--dalle-2), -8px 8px 0 var(--dalle-2), -10px 10px 0 var(--dalle-3), -12px 12px 0 var(--dalle-3);
+}
+.tuile { position: absolute; transform-style: preserve-3d; cursor: pointer; -webkit-tap-highlight-color: transparent; outline: none; transition: transform .18s ease-out; }
+.tuile:hover { transform: translateZ(4px); }
+.tuile-vide:hover { transform: none; }
+.tuile .sol { position: absolute; inset: 0; border-radius: 2px; }
+.sol-bois { background: var(--bois); }
+.sol-planches { background: var(--planches); }
+.sol-clair { background: var(--clair); }
+.sol-herbe { background: var(--herbe); }
+.sol-marbre { background: var(--marbre); }
+.sol-beton { background: var(--beton); }
+.sol-sombre { background: var(--sombre); }
+.sol-chantier { background: repeating-linear-gradient(45deg, #e8c25a 0 6px, #2b1a14 6px 12px); box-shadow: inset 0 0 0 5px #d9c39c; }
+.sol-vide { background: var(--pelouse); border: 1.5px dashed var(--pelouse-bord); box-sizing: border-box; }
+.sol-fantome { background: rgba(201, 162, 79, 0.18); box-shadow: inset 0 0 0 2px #c9a24f; animation: respire 1.8s ease-in-out infinite; }
+@keyframes respire { 50% { background: rgba(201, 162, 79, 0.38); } }
+/* Murs : plus sombres au pied, une arête claire en haut pour l'épaisseur. */
+.tuile .mur-haut { position: absolute; left: 0; top: 0; width: 100%; height: var(--h-mur); transform-origin: top; transform: rotateX(90deg);
+  background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.3), rgba(255, 255, 255, 0.05)); box-shadow: inset 0 -3px 0 rgba(255, 255, 255, 0.32); }
+.tuile .mur-droit { position: absolute; right: 0; top: 0; width: var(--h-mur); height: 100%; transform-origin: right center; transform: rotateY(90deg);
+  background-image: linear-gradient(270deg, rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.12)); box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.22); }
+.tuile .cadres { background: none !important; box-shadow: none; display: flex; justify-content: space-evenly; align-items: center; }
+.tuile .mur-droit.cadres { flex-direction: column; }
+.tuile .cadres i { position: relative; overflow: hidden; background: #6d7d8a; box-shadow: 0 0 0 1.5px #e6c878, 0 2px 3px rgba(0, 0, 0, 0.35); }
+.tuile .mur-haut.cadres i { width: 15px; height: 11px; }
+.tuile .mur-droit.cadres i { width: 11px; height: 15px; }
+/* Le mur est vu à l'envers : on remet les images à l'endroit. */
+.tuile .mur-haut.cadres img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scaleY(-1); }
+.tuile .mur-droit.cadres img { position: absolute; left: 50%; top: 50%; width: 15px; height: 11px; object-fit: cover; transform: translate(-50%, -50%) rotate(-90deg); }
+/* Lumière : ombre au pied des murs, flaque de lumière au centre. */
+.tuile .sol.eclaire::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0) 32%), linear-gradient(270deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 28%),
+    radial-gradient(55% 55% at 46% 58%, var(--lumiere-sol), rgba(255, 236, 196, 0) 72%);
+}
+.tuile .socles { position: absolute; left: 10px; right: 14px; bottom: 12px; display: flex; justify-content: space-around; transform-style: preserve-3d; pointer-events: none; }
+.tuile .socles i {
+  position: relative; width: 10px; height: 10px; background: #f1e9da; transform: translateZ(9px);
+  box-shadow: -1px 1px 0 #d6cab3, -2px 2px 0 #d6cab3, -3px 3px 0 #c5b89f, -4px 4px 0 #c5b89f, -5px 5px 0 #b6a88e, -6px 6px 0 #b6a88e, -7px 7px 0 #a7987d, -8px 8px 0 #a7987d;
+}
+.tuile .socles i::after { content: ''; position: absolute; left: 2px; top: 2px; width: 6px; height: 6px; border-radius: 50%; background: #4a3f38; }
+.tuile .bosquets { position: absolute; inset: 0; pointer-events: none; transform-style: preserve-3d; }
+.tuile .bosquets .arbre { --r: 9px; }
+.tuile .bosquets .arbre:first-child { left: 18px; top: 20px; }
+.tuile .bosquets .arbre:last-child { left: calc(100% - 20px); top: calc(100% - 18px); }
+.tuile .foule, .tuile .gardes { position: absolute; inset: 0; pointer-events: none; transform-style: preserve-3d; }
+.tuile .foule i {
+  position: absolute; width: 6px; height: 6px; border-radius: 50%; transform: translateZ(3px);
+  background-image: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.55) 0 1.5px, rgba(255, 255, 255, 0) 2px);
+  box-shadow: -1.5px 1.5px 0 rgba(0, 0, 0, 0.3); animation: 12s ease-in-out infinite alternate;
+}
+.tuile .gardes { inset: auto auto 6px 6px; display: flex; gap: 4px; }
+.tuile .gardes i { width: 7px; height: 7px; border-radius: 50%; background: #1f3346; box-shadow: 0 0 0 1.5px #e6c878, -1px 1px 0 2px rgba(0, 0, 0, 0.2); transform: translateZ(4px); }
+@keyframes flane0 { from { translate: 0 0; } 50% { translate: 10px 4px; } to { translate: -6px 9px; } }
+@keyframes flane1 { from { translate: 0 0; } 50% { translate: -9px 6px; } to { translate: 7px -5px; } }
+@keyframes flane2 { from { translate: 0 0; } 50% { translate: 5px -8px; } to { translate: -8px 3px; } }
+@media (prefers-reduced-motion: reduce) { .tuile .foule i { animation: none; } }
+.arbre {
+  position: absolute; width: calc(var(--r) * 2); height: calc(var(--r) * 2); margin: calc(var(--r) * -1) 0 0 calc(var(--r) * -1);
+  transform-style: preserve-3d; pointer-events: none;
+}
+.arbre::before { content: ''; position: absolute; inset: 4%; border-radius: 50%; background: rgba(30, 22, 10, 0.24); transform: translate(-6px, 6px); }
+.arbre i { position: absolute; border-radius: 50%; }
+.arbre i:nth-child(1) { inset: 0; background: var(--arbre-1); transform: translateZ(5px); }
+.arbre i:nth-child(2) { inset: 17%; background: var(--arbre-2); transform: translateZ(11px); }
+.arbre i:nth-child(3) { inset: 34%; background: var(--arbre-3); transform: translateZ(16px); }
+.tuile .numero {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  font-family: var(--titre); font-size: 28px; font-weight: 600; color: rgba(255, 255, 255, 0.55); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+}
+.tuile .numero .icone { width: 26px; height: 26px; }
+.tuile-accueil .numero { color: rgba(94, 29, 34, 0.55); }
+.tuile .chevalets { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 4px; }
+.tuile .chevalets i { width: 12px; height: 15px; background: #e6c878; box-shadow: 0 0 0 2px #5a3a1e; }
+.tuile.fermee .sol::after { content: ''; position: absolute; inset: 0; background: rgba(15, 5, 5, 0.5); border-radius: 2px; }
+.tuile.cible .sol { box-shadow: inset 0 0 0 4px #e6c878, 0 0 24px rgba(230, 200, 120, 0.9); }
+.tuile:focus-visible .sol { box-shadow: inset 0 0 0 3px var(--lien); }
+
+.epingles { position: absolute; inset: 0; pointer-events: none; }
+.epingle {
+  position: absolute; transform: translate(-50%, -100%); pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 3px 9px; border-radius: 999px; border: 0;
+  background: var(--carte); color: var(--texte); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap;
+  box-shadow: 0 4px 10px -4px rgba(43, 26, 20, 0.6);
+}
+.epingle .icone { width: 14px; height: 14px; }
+.epingle.alerte { background: #b3361f; color: #fff; }
+.epingle.or { background: var(--laiton-degrade); color: var(--laiton-texte); }
+.epingle.sombre { background: #2b1a14; color: #e8c25a; }
+.epingle.prix { background: var(--accent-degrade); color: var(--creme); }
+.epingle.avatars { padding: 2px 4px; gap: 0; }
+.epingle.avatars .portrait { width: 24px; height: 24px; margin-left: -6px; box-shadow: 0 0 0 2px var(--carte); }
+.epingle.avatars .portrait:first-child { margin-left: 0; }
+
+/* Tableau de bord sous le plan. */
+.indicateurs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.indicateur {
+  padding: 9px 11px; border-radius: 16px; background: var(--carte); border: 1px solid var(--trait); box-shadow: var(--ombre-carte);
+  font-size: 12px; color: var(--texte-2); text-decoration: none; min-width: 0;
+}
+.indicateur b { display: block; font-family: var(--titre); font-size: 19px; color: var(--texte); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.indicateur b.baisse { color: var(--rouge); }
+.carte-restaurer {
+  display: flex; align-items: center; gap: 14px; margin-top: 12px; padding: 12px; border-radius: 22px;
+  background: #2b1a14; color: #f6ecd9; text-decoration: none; box-shadow: var(--ombre-haute);
+  border: 1px solid rgba(255, 240, 225, 0.08);
+}
+:root[data-ambiance="nuit"] .carte-restaurer { background: #2c191d; }
+.carte-restaurer .toile { flex: none; padding: 4px; background: linear-gradient(145deg, #f3dc95 0%, #c9a24f 35%, #8a6a1f 60%, #e6c878 100%); }
+.carte-restaurer .toile-image, .carte-restaurer .vide-toile { display: block; width: 76px; height: 57px; overflow: hidden; background: #3a2a22; }
+.carte-restaurer .vide-toile { display: grid; place-items: center; color: #d9c4a8; }
+.carte-restaurer .toile-image > * { width: 100%; height: 100%; object-fit: cover; display: block; }
+.carte-restaurer .texte { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.carte-restaurer .texte b { font-family: var(--titre); font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.carte-restaurer .texte small { color: #d9c4a8; font-size: 13px; }
+.carte-restaurer .jauge { background: rgba(255, 240, 220, 0.15); }
+.carte-restaurer .lancer {
+  flex: none; width: 50px; height: 50px; border-radius: 50%; border: 0; display: grid; place-items: center;
+  color: #3b2a0a; background: var(--laiton-degrade); box-shadow: 0 8px 18px -6px rgba(230, 200, 120, 0.6);
+}
+.carte-restaurer .lancer:disabled { opacity: 0.4; }
+.a-traiter .section h2 { flex: none; }
+.pastille-titre { background: var(--rouge); color: #fff; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 1px 8px; }
+.alertes { padding: 2px 14px; }
+.alerte-ligne {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 0; border: 0; border-top: 1px solid var(--trait);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.alerte-ligne:first-child { border-top: 0; }
+.alerte-icone {
+  width: 38px; height: 38px; border-radius: 12px; flex: none; display: grid; place-items: center;
+  color: var(--teinte); background: color-mix(in srgb, var(--teinte) 15%, transparent);
+}
+.alerte-icone .icone { width: 20px; height: 20px; }
+.alerte-texte { flex: 1; min-width: 0; display: grid; }
+.alerte-texte b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alerte-texte small { font-size: 13px; color: var(--texte-2); }
+.alerte-action { font-size: 13px; font-weight: 700; color: var(--lien); }
+
+/* Tiroir des badges (mode Équipe du plan). */
+.tiroir { display: flex; gap: 10px; overflow-x: auto; padding: 14px 2px 8px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; scrollbar-width: none; }
+.tiroir::-webkit-scrollbar { display: none; }
+.badge-agent {
+  flex: none; width: 92px; padding: 0 0 10px; border-radius: 16px; border: 1px solid var(--trait); overflow: hidden;
+  background: var(--carte); box-shadow: var(--ombre-carte); color: inherit; font: inherit; text-decoration: none;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; touch-action: none; cursor: grab;
+}
+.badge-agent .bandeau { align-self: stretch; height: 26px; background: #1f3346; display: flex; justify-content: center; padding-top: 6px; box-sizing: border-box; }
+.badge-agent .bandeau i { width: 22px; height: 6px; border-radius: 3px; background: var(--fond); }
+.badge-agent .portrait { width: 46px; height: 46px; margin-top: -12px; border-radius: 14px; box-shadow: 0 0 0 3px var(--carte); }
+.badge-agent b { font-size: 13px; margin-top: 3px; }
+.badge-agent small { font-size: 11px; color: var(--texte-2); }
+.badge-agent .couverture { display: flex; gap: 3px; margin-top: 4px; }
+.badge-agent .couverture i { width: 12px; height: 4px; border-radius: 2px; background: var(--carte-3); }
+.badge-agent .couverture i.pleine { background: #c9a24f; }
+.badge-agent.recruter { justify-content: center; border-style: dashed; box-shadow: none; background: transparent; cursor: pointer; padding-top: 10px; }
+.badge-agent .rond, .badge .rond { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: #2b1a14; color: #f1d891; }
+.badge-agent.soulevee { opacity: 0.35; }
+.fantome-badge { position: fixed; z-index: 100; pointer-events: none; transform: translate(-50%, -60%) scale(1.06) rotate(-3deg); box-shadow: var(--ombre-haute); }
+
+/* Fiches du plan. */
+.bandeau-alerte {
+  display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border-radius: 16px; margin: 6px 0 4px;
+  background: color-mix(in srgb, var(--rouge) 14%, transparent); border: 1px solid color-mix(in srgb, var(--rouge) 35%, transparent); color: var(--rouge);
+}
+.bandeau-alerte > span { flex: 1; display: grid; }
+.bandeau-alerte small { font-size: 12px; opacity: 0.85; }
+.oeuvres-salle { display: flex; align-items: center; gap: 28px; overflow-x: auto; padding: 16px 14px 18px; margin: 0 -18px; scrollbar-width: none; background: var(--mur); }
+.oeuvre-salle { flex: none; padding: 0; border: 0; background: none; }
+.materiel-ligne .portrait { width: 40px; height: 40px; }
+
+/* ---------- Visite : les salles en perspective ---------- */
+
+.visite { display: grid; gap: 16px; margin-top: 10px; }
+.salle-visite {
+  position: relative; overflow: hidden; border-radius: 24px; color: var(--creme);
+  padding: 30px 34px 52px;
+  background:
+    radial-gradient(30% 140px at 22% 0, rgba(255, 226, 170, 0.22), rgba(255, 226, 170, 0) 100%),
+    radial-gradient(34% 160px at 50% 0, rgba(255, 226, 170, 0.28), rgba(255, 226, 170, 0) 100%),
+    radial-gradient(30% 140px at 78% 0, rgba(255, 226, 170, 0.22), rgba(255, 226, 170, 0) 100%),
+    var(--mur);
+  box-shadow: var(--ombre-haute);
+}
+:root[data-ambiance="nuit"] .salle-visite {
+  background:
+    radial-gradient(28% 170px at 22% 0, rgba(255, 220, 160, 0.30), rgba(255, 220, 160, 0) 100%),
+    radial-gradient(32% 190px at 50% 0, rgba(255, 220, 160, 0.36), rgba(255, 220, 160, 0) 100%),
+    radial-gradient(28% 170px at 78% 0, rgba(255, 220, 160, 0.30), rgba(255, 220, 160, 0) 100%),
+    color-mix(in srgb, var(--mur) 55%, #000);
+}
+.salle-visite .plafond { position: absolute; left: 0; right: 0; top: 0; height: 20px; background: rgba(0, 0, 0, 0.3); clip-path: polygon(0 0, 100% 0, calc(100% - 24px) 100%, 24px 100%); }
+.salle-visite .paroi { position: absolute; top: 0; bottom: 0; width: 24px; }
+.salle-visite .paroi.gauche { left: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0.14)); clip-path: polygon(0 0, 100% 20px, 100% calc(100% - 40px), 0 100%); }
+.salle-visite .paroi.droite { right: 0; background: linear-gradient(270deg, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0.14)); clip-path: polygon(100% 0, 0 20px, 0 calc(100% - 40px), 100% 100%); }
+.salle-visite .parquet {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
+  background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 38px, rgba(30, 15, 5, 0.22) 38px 39px), linear-gradient(180deg, #8a6440 0%, #5a3f28 100%);
+  clip-path: polygon(24px 0, calc(100% - 24px) 0, 100% 100%, 0 100%);
+}
+:root[data-ambiance="nuit"] .salle-visite .parquet { background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0) 0 38px, rgba(0, 0, 0, 0.3) 38px 39px), linear-gradient(180deg, #4a3422 0%, #2a1c12 100%); }
+.salle-visite .fond { position: relative; z-index: 1; }
+.salle-visite .accrochage { padding: 8px 0 18px; gap: 26px 22px; min-height: 100px; }
+:root[data-ambiance="nuit"] .salle-visite .cadre { filter: drop-shadow(0 0 18px rgba(255, 214, 150, 0.18)); }
+.salle-visite.fermee .accrochage { filter: brightness(0.45) saturate(0.6); }
+.salle-visite.travaux { background: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.2) 0 14px, transparent 14px 28px), #6b5a44; }
+.salle-visite .mur-pied .puce { background: rgba(0, 0, 0, 0.3); color: var(--creme); text-decoration: none; }
+.salle-visite .mur-pied .puce.alerte { background: var(--rouge); color: #fff; }
+.aile-titre { padding: 8px 4px 0; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--texte-3); font-weight: 700; background: none; }
+
+/* L'étagère des œuvres à accrocher, au-dessus de la barre. */
+.etagere {
+  position: fixed; left: 12px; right: 12px; bottom: calc(var(--bas) + 88px); z-index: 25;
+  max-width: 656px; margin: 0 auto; border-radius: 22px; padding: 8px 0 4px;
+  background: var(--verre); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border: 1px solid var(--verre-bord); box-shadow: var(--ombre-haute);
+  transition: opacity .15s, transform .15s;
+}
+.etagere .bac-titre { color: var(--texte-3); padding: 0 16px; }
+.etagere .bac-titre a { color: var(--lien); }
+.etagere .bac { padding: 14px 18px 12px; gap: 22px; min-height: 0; }
+.etagere .bac.vide-bac { padding: 8px 16px 10px; }
+
+/* ---------- Équipe : les badges ---------- */
+
+.services { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+.service {
+  min-height: 62px; border-radius: 18px; border: 1px solid var(--trait); background: var(--carte); color: var(--texte-2);
+  display: grid; place-items: center; align-content: center; gap: 1px; font: inherit; box-shadow: var(--ombre-carte); cursor: pointer;
+}
+.service b { font-family: var(--titre); font-size: 20px; color: var(--texte); }
+.service span { font-size: 12px; font-weight: 600; }
+.service.actif { background: #2b1a14; color: #e8c77a; border-color: transparent; }
+.service.actif b { color: #f6ecd9; }
+:root[data-ambiance="nuit"] .service.actif { background: color-mix(in srgb, #f3dc95 16%, transparent); border-color: rgba(243, 220, 149, 0.5); }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
+.badge {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 10px 14px;
+  border-radius: 18px; overflow: hidden; border: 1px solid var(--trait); background: var(--carte); color: inherit; font: inherit;
+  box-shadow: var(--ombre-carte); cursor: pointer; text-align: center;
+}
+.badge:nth-child(odd) { transform: rotate(-0.8deg); }
+.badge:nth-child(even) { transform: rotate(0.7deg); }
+.badge .bandeau { align-self: stretch; margin: 0 -10px; height: 44px; background: var(--service, #1f3346); display: flex; justify-content: center; padding-top: 8px; box-sizing: border-box; }
+.badge .bandeau i { width: 34px; height: 8px; border-radius: 4px; background: var(--fond); }
+.badge .portrait { width: 64px; height: 64px; border-radius: 16px; margin-top: -24px; box-shadow: 0 0 0 3px var(--carte); }
+.badge b { font-size: 15px; margin-top: 4px; }
+.badge small { font-size: 12px; color: var(--texte-2); }
+.niveau-badge { font-size: 11px; font-weight: 700; color: var(--laiton-texte); background: var(--laiton-degrade); border-radius: 6px; padding: 1px 7px; margin-top: 3px; }
+.badge .etiquettes { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 6px; }
+.badge .puce { font-size: 11px; padding: 2px 7px; }
+.badge .puce.salle { background: var(--accent-degrade); color: var(--creme); }
+.badge.recruter { justify-content: center; border-style: dashed; border-width: 2px; background: transparent; box-shadow: none; padding-top: 18px; min-height: 180px; }
+
 @media (min-width: 720px) {
   .chiffres { grid-template-columns: repeat(4, 1fr); }
-  #navigation { left: 50%; right: auto; width: 680px; transform: translateX(-50%); border-radius: 22px 22px 0 0; }
-  body[data-route="musee"] main { padding-top: 0; }
 }

@@ -1,12 +1,13 @@
-// Collection : toutes les œuvres, où qu'elles soient, avec leur état, leur
-// attrait et de quoi les déplacer d'un appui. Filtres par lieu, recherche
-// par titre ou artiste.
+// Collection : les arrivages de la semaine en tête, puis toutes les œuvres,
+// où qu'elles soient, avec leur état, leur attrait et de quoi les déplacer
+// d'un appui. Filtres par lieu, recherche par titre ou artiste.
 
 import { h, vider, ajouter, icone, pourcent } from '../dom.js';
 import { cadreOeuvre, cartel, puceNiveau } from '../composants.js';
 import { compter } from '../../moteur/batiment.js';
 import { nouveaute } from '../../moteur/regles.js';
 import { actionsOeuvre, conservation, lieuTexte } from '../oeuvres.js';
+import { afficher as afficherArrivages } from './arrivages.js';
 
 const FILTRES = [
   ['tout', 'Toutes', () => true],
@@ -53,6 +54,7 @@ export async function afficher(app, vue, { route }) {
     vider(liste, visibles.length ? visibles.map((o) => ligne(app, o, fiches.get(o.id))) : h('div.vide', 'Aucune œuvre'));
   }
 
+  await afficherArrivages(app, vue);
   ajouter(vue,
     h('div.section', h('h2', 'Collection'),
       h('span.aside', `Réserve ${compter(e, 'reserve')}/${e.batiment.reserve.places} · repos ${compter(e, 'privee')}/${e.batiment.privee.places}`)),

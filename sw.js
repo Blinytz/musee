@@ -12,7 +12,7 @@
  */
 
 const PREFIXE = 'musee-';
-const CACHE = `${PREFIXE}v7-gestion`;
+const CACHE = `${PREFIXE}v8-plan`;
 const CACHE_CATALOGUE = `${PREFIXE}catalogue`;
 
 const FICHIERS = [
@@ -61,18 +61,20 @@ const FICHIERS = [
   './js/ui/genres.js',
   './js/ui/icones.js',
   './js/ui/push.js',
+  './js/ui/theme.js',
   './js/vendor/portraits.js',
   './js/ui/pages/arrivages.js',
   './js/ui/pages/atelier.js',
   './js/ui/pages/classement.js',
-  './js/ui/pages/direction.js',
+  './js/ui/pages/equipe.js',
+  './js/ui/pages/finances.js',
   './js/ui/pages/expositions.js',
   './js/ui/pages/historique.js',
   './js/ui/pages/investir.js',
   './js/ui/pages/musee.js',
   './js/ui/pages/oeuvre.js',
-  './js/ui/pages/personnel.js',
-  './js/ui/pages/securite.js',
+  './js/ui/pages/plan.js',
+  './js/ui/pages/profil.js',
   './js/ui/pages/rapport.js',
   './js/ui/pages/reglages.js',
   './js/ui/pages/collection.js',

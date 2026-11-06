@@ -1,5 +1,6 @@
 // Arrivages : œuvres proposées chaque lundi, à 0 % de restauration. Elles
-// arrivent en caisses, que l'on ouvre une à une.
+// arrivent en caisses, que l'on ouvre une à une. Affichés en tête de la
+// Collection.
 
 import { h, icone, nombre, dateJour, siecleTexte, ajouter } from '../dom.js';
 import { vignette, puceNiveau } from '../composants.js';
@@ -21,7 +22,7 @@ export async function afficher(app, vue) {
 
   if (!arrivages.length) {
     const prochain = prochainJourSemaine(jour, cfg.arrivages.jourSemaine);
-    ajouter(vue, h('div.vide', `Prochain arrivage le ${dateJour(prochain, { weekday: 'long', day: 'numeric', month: 'long' })}`));
+    ajouter(vue, h('div.tres-discret', { style: { padding: '0 4px' } }, `Prochain arrivage le ${dateJour(prochain, { weekday: 'long', day: 'numeric', month: 'long' })}`));
     return;
   }
 

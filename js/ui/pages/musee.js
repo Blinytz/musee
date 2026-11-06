@@ -1,18 +1,17 @@
-// Écran Musée : les salles comme des murs peints, les œuvres accrochées
-// dans leurs cadres, la réserve à accrocher, et la carte « Restaurer »
-// toujours à portée de pouce. Accrochage par glisser-déposer.
+// Visite : les salles en perspective, comme on y entre, chacune avec ses
+// murs, son parquet et ses œuvres sous les spots. L'étagère du bas porte les
+// œuvres à accrocher : on les glisse sur un mur, ou on y redépose une œuvre
+// pour la décrocher. La gestion des salles se fait sur le Plan.
 
-import { h, vider, icone, siecleTexte, ajouter, majuscule, pourcent } from '../dom.js';
-import { feuille, miniature, puceNiveau, annoncer, messageErreur, cadreOeuvre, couleurMur, peindre, cartel } from '../composants.js';
+import { h, vider, icone, siecleTexte, ajouter, majuscule } from '../dom.js';
+import { feuille, miniature, puceNiveau, annoncer, messageErreur, cadreOeuvre, couleurMur } from '../composants.js';
 import { espacesPublics, contenuEspace, refusAccrochage } from '../../moteur/batiment.js';
 import { espacesOuverts } from '../../moteur/visiteurs.js';
-import { estConforme, valeurTheme, niveau, niveauMaitrise } from '../../moteur/regles.js';
-import { etape } from '../../rendu/restauration.js';
-import { choisirDuree } from './atelier.js';
+import { estConforme, valeurTheme } from '../../moteur/regles.js';
 import { probabilites } from '../../moteur/securite.js';
-import { ficheSalle, risqueSalle, niveauRisque } from '../fiches.js';
+import { risqueSalle, niveauRisque } from '../fiches.js';
 
-export async function afficher(app, vue) {
+export async function afficher(app, vue, { params = [] } = {}) {
   const { jeu } = app;
   const e = jeu.etat;
   const cfg = jeu.cfg;
@@ -21,57 +20,53 @@ export async function afficher(app, vue) {
   const ids = Object.keys(e.oeuvres).map(Number);
   (await app.catalogue.fiches(ids)).forEach((f, i) => fiches.set(ids[i], f));
 
-  ajouter(vue,
-    plan(app, e, cfg, fiches, jour, espacesOuverts(cfg, e, jour)),
-    carteRestaurer(app, e, cfg, fiches),
-  );
+  ajouter(vue, salles(app, e, cfg, fiches, jour, espacesOuverts(cfg, e, jour)), etagere(app, e, cfg, fiches));
+  // Arrivée depuis le plan : la salle demandée à l'écran.
+  if (params[0]) requestAnimationFrame(() => document.getElementById(`salle-${params[0]}`)?.scrollIntoView({ block: 'center' }));
   return activerGlisser(app, vue);
 }
 
-/* ---------- Plan ---------- */
+/* ---------- Salles ---------- */
 
 // Hauteur d'accrochage selon le niveau : un trésor domine le mur.
-const hauteurCadre = (n) => 76 + 14 * (n || 0);
+const hauteurCadre = (n) => 70 + 12 * (n || 0);
 
-function plan(app, e, cfg, fiches, jour, ouverture) {
-  const racine = h('div');
+function salles(app, e, cfg, fiches, jour, ouverture) {
+  const racine = h('div.visite');
   const espaces = espacesPublics(e);
-  const largeurMax = Math.min(680, window.innerWidth || 390) - 70;
+  const largeurMax = Math.min(680, window.innerWidth || 390) - 110;
   const p7 = probabilites(cfg, e, jour);
   let rang = 0;
-  const murs = [];
   for (let a = 1; a <= e.batiment.ailes; a++) {
-    const salles = espaces.filter((s) => s.type === 'salle' && s.aile === a);
-    if (e.batiment.ailes > 1) murs.push(h('div.aile-titre', `Aile ${a}`));
-    if (salles.length) {
-      for (const s of salles) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax, p7));
-    } else {
-      murs.push(h('section.mur', { style: { '--mur': couleurMur(null, rang++) } },
-        h('div.mur-vide', h('a.bouton.or.petit', { href: '#/investir' }, icone('ajouter'), 'Nouvelle salle'))));
-    }
+    const liste = espaces.filter((s) => s.type === 'salle' && s.aile === a);
+    if (e.batiment.ailes > 1) ajouter(racine, h('div.aile-titre', `Aile ${a}`));
+    if (liste.length) for (const s of liste) ajouter(racine, salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax, p7));
+    else ajouter(racine, boite({ '--mur': couleurMur(null, rang++) }, h('div.mur-vide', h('a.bouton.or.petit', { href: '#/plan', onclick: () => modeConstruire() }, icone('investir'), 'Construire'))));
   }
-  for (const s of espaces.filter((x) => x.type !== 'salle')) murs.push(salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax, p7));
-  // Les chantiers : un mur sous échafaudage, qui avance pendant les sessions.
+  for (const s of espaces.filter((x) => x.type !== 'salle')) ajouter(racine, salle(app, e, cfg, s, fiches, ouverture, rang++, largeurMax, p7));
+  // Les chantiers : une salle sous échafaudage, qui avance pendant les sessions.
   for (const c of e.chantiers || []) {
-    murs.push(h('section.mur.travaux',
-      h('div.mur-vide', h('a.plaque', { href: '#/investir' }, c.nom, h('small', `Chantier · ${Math.floor(c.fait)} / ${c.heures} h`)))));
+    ajouter(racine, boite({}, h('div.mur-vide', h('a.plaque', { href: '#/plan', onclick: () => modeConstruire() }, c.nom, h('small', `Chantier · ${Math.floor(c.fait)} / ${c.heures} h`))), 'travaux'));
   }
   if (e.batiment.exposition) {
     const x = e.expositions.courante;
-    murs.push(h('section.mur', { style: { '--mur': '#1f1a17' } },
-      h('div.mur-vide',
-        h('a.plaque', { href: '#/expositions' },
-          x ? x.theme.libelle : 'Exposition temporaire',
-          h('small', x ? `${x.oeuvres.length + x.emprunts.length} œuvres · ${x.fin - jour} j` : 'Aucune en cours')))));
+    ajouter(racine, boite({ '--mur': '#1f1a17' }, h('div.mur-vide',
+      h('a.plaque', { href: '#/expositions' },
+        x ? x.theme.libelle : 'Exposition temporaire',
+        h('small', x ? `${x.oeuvres.length + x.emprunts.length} œuvres · ${x.fin - jour} j` : 'Aucune en cours')))));
   }
-  // Le premier mur donne sa couleur à l'en-tête et à la barre d'état.
-  const premier = murs.find((m) => m.classList.contains('mur'));
-  if (premier) {
-    premier.classList.add('premier');
-    document.body.style.setProperty('--mur-entete', premier.style.getPropertyValue('--mur'));
-  }
-  ajouter(racine, murs, bac(app, e, cfg, fiches));
   return racine;
+}
+
+function modeConstruire() {
+  try { sessionStorage.setItem('musee_plan_mode', 'construire'); } catch { /* navigation privée */ }
+}
+
+/** Une salle vue depuis son entrée : plafond, parois, parquet, mur du fond. */
+function boite(style, contenu, classe = '', attributs = {}) {
+  return h('section.salle-visite', { style, classe, ...attributs },
+    h('span.plafond'), h('span.paroi.gauche'), h('span.paroi.droite'), h('span.parquet'),
+    h('div.fond', contenu));
 }
 
 function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax, p7) {
@@ -81,7 +76,8 @@ function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax, p7) {
   const conformes = contenu.filter((id) => id !== null && estConforme(e.oeuvres[id], theme)).length;
   const garnies = contenu.filter((id) => id !== null).length;
   const fermee = ouverture?.fermes.includes(s.id);
-  return h('section.mur', { dataset: { espace: s.id }, classe: fermee ? 'fermee' : '', style: { '--mur': couleurMur(s, rang) } },
+  const nom = s.nom || cfg.espaces[s.type]?.nom || s.id;
+  return boite({ '--mur': couleurMur(s, rang) }, [
     h('div.accrochage', contenu.map((id, i) => {
       const o = id !== null ? e.oeuvres[id] : null;
       const hors = o && theme && !estConforme(o, theme);
@@ -89,76 +85,40 @@ function salle(app, e, cfg, s, fiches, ouverture, rang, largeurMax, p7) {
       return h('button.place', {
         type: 'button',
         classe: o ? 'occupee' : 'libre',
-        style: o ? null : { width: '50px', height: '64px' },
+        style: o ? null : { width: '46px', height: '58px' },
         dataset: { espace: s.id, place: i, ...(o ? { oeuvre: id } : {}) },
         'aria-label': o ? o.titre : 'Place libre',
         onclick: () => (o ? app.naviguer(`oeuvre/${id}`) : choisirOeuvre(app, e, cfg, s, i, fiches)),
       }, o ? [
         cadreOeuvre(app, { id, fiche: fiches.get(id), oeuvre: o, hauteur: hauteurCadre(o.niveau), largeurMax, cote: 400 }),
         hors ? h('span.hors-theme') : null,
-        usee ? h('span.a-reparer', { title: 'À réparer' }, icone('atelier')) : null,
+        usee ? h('span.a-reparer', { title: 'À réparer' }, icone('reparer')) : null,
       ]
         : icone('ajouter'));
     })),
     h('div.mur-pied',
       h('button.plaque', { type: 'button', onclick: () => choisirTheme(app, e, cfg, s) },
-        s.nom || cfg.espaces[s.type]?.nom || s.id,
+        nom,
         h('small', [theme ? theme.libelle : 'Sans thème', theme && garnies ? `${conformes}/${garnies}` : null].filter(Boolean).join(' · '))),
       h('span.puce', `${garnies}/${s.places}`),
-      // Le risque de la semaine dans cette salle : un appui ouvre sa sécurité.
-      garnies ? h('button.puce', { type: 'button', style: { color: niveauRisque(risque).couleur === 'var(--vert)' ? null : 'var(--laiton-clair)' }, onclick: () => ficheSalle(app, s.id) },
+      garnies ? h('a.puce', { href: '#/plan', style: { color: niveauRisque(risque).couleur === 'var(--vert)' ? null : 'var(--laiton-clair)' } },
         icone('securite'), `${(risque * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`) : null,
-      fermee ? h('a.puce.alerte', { href: '#/personnel' }, 'Fermée') : null));
+      fermee ? h('a.puce.alerte', { href: '#/plan' }, 'Fermée') : null),
+  ], fermee ? 'fermee' : '', { id: `salle-${s.id}`, dataset: { espace: s.id } });
 }
 
 /** Œuvres restaurées disponibles pour l'accrochage, glissables vers une place. */
-function bac(app, e, cfg, fiches) {
+function etagere(app, e, cfg, fiches) {
   const libres = Object.values(e.oeuvres).filter((o) => o.progression >= 1 && !o.travaux
     && (o.usure || 0) < cfg.usure.maxExposable && (o.lieu === 'reserve' || o.lieu === 'privee' || o.lieu === 'atelier'));
-  return h('section.mur.reserve-mur', { style: { '--mur': '#2a1d17' } },
+  return h('section.etagere', { 'aria-label': 'À accrocher' },
     h('div.bac-titre', h('span', `À accrocher · ${libres.length}`), h('a', { href: '#/collection' }, 'Collection')),
     h('div.bac', { dataset: { bac: '1' }, classe: libres.length ? '' : 'vide-bac' },
       libres.length ? libres.map((o) => h('button.place.occupee', {
         type: 'button', dataset: { oeuvre: o.id, origine: o.lieu }, 'aria-label': o.titre,
         onclick: () => app.naviguer(`oeuvre/${o.id}`),
-      }, cadreOeuvre(app, { id: o.id, fiche: fiches.get(o.id), oeuvre: o, hauteur: 70, largeurMax: 120, cote: 240 })))
-        : h('div.tres-discret', { style: { color: 'var(--creme-2)' } }, 'Rien à accrocher')));
-}
-
-/* ---------- Restaurer ---------- */
-
-/**
- * L'œuvre en cours à l'atelier, sa progression, et de quoi lancer une
- * session en deux appuis. Sans œuvre en cours : le chemin vers l'atelier
- * ou les arrivages.
- */
-function carteRestaurer(app, e, cfg, fiches) {
-  const enAtelier = Object.values(e.oeuvres).filter((o) => o.lieu === 'atelier');
-  const o = enAtelier.filter((x) => x.progression < 1).sort((a, b) => b.progression - a.progression)[0];
-  if (!o) {
-    const aRestaurer = Object.values(e.oeuvres).some((x) => x.lieu === 'reserve' && x.progression < 1);
-    return h('div.restaurer',
-      h('div.restaurer-toile', { style: { display: 'grid', placeItems: 'center', color: 'var(--creme-2)' } }, icone('atelier')),
-      h('div.restaurer-texte', h('b', 'Atelier libre')),
-      aRestaurer
-        ? h('a.bouton.primaire', { href: '#/atelier' }, 'Choisir')
-        : h('a.bouton.primaire', { href: '#/arrivages' }, 'Arrivages'));
-  }
-  const fiche = fiches.get(o.id);
-  const toile = h('div.restaurer-toile');
-  peindre(app, toile, { fiche, oeuvre: o, progression: o.progression, id: o.id, support: o.support, cote: 160, remplir: true });
-  const requise = niveau(cfg, o.niveau).maitrise;
-  const actuelle = niveauMaitrise(cfg, e.maitrise[o.support] || 0);
-  const bloque = actuelle < requise;
-  return h('div.restaurer',
-    toile,
-    h('div.restaurer-texte',
-      h('b', cartel(app, o, fiche).titre),
-      h('div.ligne', h('div.jauge', h('i', { style: { width: `${o.progression * 100}%` } })), h('span', pourcent(o.progression))),
-      h('div.tres-discret', { style: { fontSize: '12px', marginTop: '2px' } }, bloque ? `Maîtrise ${requise} requise` : etape(cfg.rendu, o.progression).nom)),
-    bloque
-      ? h('a.bouton', { href: '#/atelier' }, 'Atelier')
-      : h('button.bouton.primaire', { type: 'button', disabled: !!e.session, onclick: () => choisirDuree(app, o) }, 'Restaurer'));
+      }, cadreOeuvre(app, { id: o.id, fiche: fiches.get(o.id), oeuvre: o, hauteur: 56, largeurMax: 100, cote: 240 })))
+        : h('div.tres-discret', 'Rien à accrocher')));
 }
 
 /* ---------- Choix ---------- */
@@ -210,7 +170,7 @@ export function valeursTheme(cfg, e, type) {
   return [...vues.values()].sort((a, b) => b.n - a.n || String(a.libelle).localeCompare(String(b.libelle)));
 }
 
-function choisirTheme(app, e, cfg, s) {
+export function choisirTheme(app, e, cfg, s) {
   let type = s.theme?.type || 'mouvement';
   const liste = h('div.pile');
   const onglets = h('div.onglets');
@@ -296,7 +256,7 @@ function activerGlisser(app, racine) {
     if (!etat?.actif) return;
     const marge = 90;
     const y = etat.yCourant ?? etat.y;
-    const bas = window.innerHeight - 110;
+    const bas = window.innerHeight - 230;
     let pas = 0;
     if (y < marge) pas = -Math.ceil((marge - y) / 5);
     else if (y > bas - marge) pas = Math.ceil((y - (bas - marge)) / 5);

@@ -292,9 +292,28 @@ prêt ; dépassement au classement (gagné ou perdu) ; nouveau statut ; fin
 d'exposition temporaire.
 
 ## 19. Écrans
-Musée (plan des ailes et salles, accrochage par glisser-déposer), Atelier,
-Session, Réserve, Collection privée, Arrivages, Investissements, Classement,
-Expositions et prêts, Rapport, Fiche d'œuvre, Réglages.
+Refonte du 6 novembre 2026 : la gestion n'est plus rangée dans des
+sous-onglets, chaque décision se prend là où elle agit.
+
+- Barre flottante à cinq entrées : **Plan**, **Visite**, **Atelier** (bouton
+  rond au centre), **Collection**, **Équipe**. Le nom du musée ouvre le
+  Profil (statut, classement, rapport, historique, expositions, réglages), le
+  solde ouvre les Finances (billet, heure de session type, campagnes).
+- **Plan** : le bâtiment en maquette 3D vue d'en haut (ailes à l'arrière,
+  rangée des services au premier plan : accueil, poste de sécurité, atelier,
+  réserve, collection privée). Trois modes : Musée (alertes de chaque pièce,
+  indicateurs, restauration en cours, liste « À traiter »), Construire (les
+  emplacements à bâtir avec leur prix et leurs heures de chantier), Équipe
+  (glisser le badge d'un agent sur une pièce l'y affecte). Toucher une pièce
+  ouvre sa fiche : œuvres, gardiennage, sécurité, agrandissement.
+- **Visite** : les salles en perspective (plafond, parois, parquet, spots),
+  accrochage par glisser-déposer depuis l'étagère fixée au-dessus de la barre.
+- **Collection** : les arrivages de la semaine en tête, puis toutes les œuvres.
+- **Équipe** : les badges par service (sécurité, atelier, public, direction),
+  les candidats, les métiers ; côté sécurité, enquêtes, matériel commun et
+  derniers incidents.
+- **Ambiance** : Relief le jour, Nocturne le soir (de 20 h à 8 h), ou figée
+  dans les réglages.
 
 ## 20. Repères d'équilibrage
 Simulation de référence : sessions quotidiennes, une œuvre à la fois, toujours

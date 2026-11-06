@@ -1,9 +1,10 @@
-// Réglages : nom, sessions, notifications, compte, paramètres du jeu.
+// Réglages : nom, ambiance, sessions, notifications, compte, paramètres du jeu.
 
 import { h, icone, duree, ajouter } from '../dom.js';
 import { tenter, confirmer, annoncer } from '../composants.js';
 import { CONFIG } from '../../config.js';
 import { abonnerPush, desabonnerPush, etatPush } from '../push.js';
+import { AMBIANCES } from '../theme.js';
 
 export async function afficher(app, vue) {
   const { jeu } = app;
@@ -25,6 +26,12 @@ export async function afficher(app, vue) {
         await app.agir('reglages', { dureeSession: Math.round(Number(dureeSession.value)) }, { succes: 'Durée enregistrée' });
       },
     }, h('label.champ', h('span', `Durée de session par défaut (${duree(e.reglages.dureeSession)})`), dureeSession), h('button.bouton', { type: 'submit' }, 'Enregistrer')),
+    h('div.carte.pile',
+      h('h3', 'Ambiance'),
+      h('div.onglets', AMBIANCES.map(([id, nom]) => h('button', {
+        type: 'button', classe: (e.reglages.ambiance || 'auto') === id ? 'actif' : '',
+        onclick: () => app.agir('reglages', { ambiance: id }),
+      }, id === 'jour' ? icone('jour') : id === 'nuit' ? icone('nuit') : null, nom)))),
     await notifications(app, e, cfg),
     compte(app),
     parametres(app, e),

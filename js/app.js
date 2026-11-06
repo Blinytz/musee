@@ -7,38 +7,46 @@ import { createJeu } from './jeu.js';
 import { h, vider, icone, nombre } from './ui/dom.js';
 import { annoncer, messageErreur, tenter } from './ui/composants.js';
 import { afficherSession, afficherBilan } from './ui/pages/session.js';
-import { visiteursDuJour } from './moteur/visiteurs.js';
+import { visiteursDuJour, espacesOuverts } from './moteur/visiteurs.js';
+import { appliquerAmbiance } from './ui/theme.js';
 import { finPrevue } from './moteur/actions.js';
 
 const PAGES = {
-  musee: () => import('./ui/pages/musee.js'),
+  // Le plan du musée : l'accueil, et tout ce qui se gère sur le bâtiment.
+  plan: () => import('./ui/pages/plan.js'),
+  // La visite : les salles en perspective, l'accrochage.
+  visite: () => import('./ui/pages/musee.js'),
   atelier: () => import('./ui/pages/atelier.js'),
-  arrivages: () => import('./ui/pages/arrivages.js'),
-  classement: () => import('./ui/pages/classement.js'),
-  direction: () => import('./ui/pages/direction.js'),
-  // Ancienne adresse du menu, gardée pour les notifications déjà envoyées.
-  plus: () => import('./ui/pages/direction.js'),
   collection: () => import('./ui/pages/collection.js'),
-  // Anciennes adresses : la Collection, filtrée.
-  reserve: () => import('./ui/pages/collection.js'),
-  privee: () => import('./ui/pages/collection.js'),
+  equipe: () => import('./ui/pages/equipe.js'),
+  profil: () => import('./ui/pages/profil.js'),
+  finances: () => import('./ui/pages/finances.js'),
+  classement: () => import('./ui/pages/classement.js'),
   investir: () => import('./ui/pages/investir.js'),
   expositions: () => import('./ui/pages/expositions.js'),
   rapport: () => import('./ui/pages/rapport.js'),
   historique: () => import('./ui/pages/historique.js'),
   reglages: () => import('./ui/pages/reglages.js'),
   oeuvre: () => import('./ui/pages/oeuvre.js'),
-  personnel: () => import('./ui/pages/personnel.js'),
-  securite: () => import('./ui/pages/securite.js'),
+  // Anciennes adresses (liens, notifications déjà envoyées).
+  musee: () => import('./ui/pages/plan.js'),
+  direction: () => import('./ui/pages/profil.js'),
+  plus: () => import('./ui/pages/profil.js'),
+  arrivages: () => import('./ui/pages/collection.js'),
+  reserve: () => import('./ui/pages/collection.js'),
+  privee: () => import('./ui/pages/collection.js'),
+  personnel: () => import('./ui/pages/equipe.js'),
+  securite: () => import('./ui/pages/equipe.js'),
 };
 
+// L'Atelier, au centre de la barre, est le cœur du jeu.
 const ONGLETS = [
-  { route: 'musee', nom: 'Musée', icone: 'musee' },
-  { route: 'atelier', nom: 'Atelier', icone: 'atelier' },
-  { route: 'arrivages', nom: 'Arrivages', icone: 'arrivages' },
-  { route: 'direction', nom: 'Direction', icone: 'direction' },
+  { route: 'plan', nom: 'Plan', icone: 'plan', aussi: ['musee', 'profil', 'direction', 'plus', 'finances', 'investir', 'classement', 'rapport', 'expositions'] },
+  { route: 'visite', nom: 'Visite', icone: 'visite', aussi: [] },
+  { route: 'atelier', nom: 'Atelier', icone: 'atelier', centre: true, aussi: ['historique'] },
+  { route: 'collection', nom: 'Collection', icone: 'collection', aussi: ['arrivages', 'reserve', 'privee', 'oeuvre'] },
+  { route: 'equipe', nom: 'Équipe', icone: 'visiteurs', aussi: ['personnel', 'securite'] },
 ];
-const SOUS_PAGES_DIRECTION = ['direction', 'plus', 'collection', 'reserve', 'privee', 'investir', 'expositions', 'rapport', 'historique', 'reglages', 'personnel', 'securite', 'classement'];
 
 const parametresUrl = new URLSearchParams(location.search);
 const demo = parametresUrl.has('demo');
@@ -71,7 +79,7 @@ const app = {
     else location.hash = `#/${route}`;
   },
   retour() {
-    if (history.length > 1) history.back(); else app.naviguer('musee');
+    if (history.length > 1) history.back(); else app.naviguer('plan');
   },
   /** Exécute une action du jeu, affiche l'erreur éventuelle, rafraîchit le solde. */
   async agir(nom, params, options = {}) {
@@ -109,7 +117,7 @@ function majInstallation() {
     else b.hidden = !installation;
   }
   majEntete();
-  if (['direction', 'plus', 'reglages'].includes(routeCourante().nom)) afficherRoute({ garderDefilement: true });
+  if (['profil', 'reglages'].includes(routeCourante().nom)) afficherRoute({ garderDefilement: true });
 }
 
 async function rafraichirSolde() {
@@ -126,16 +134,17 @@ async function rafraichirSolde() {
 function majEntete() {
   const e = jeu.etat;
   if (!e) { entete.hidden = true; navigation.hidden = true; return; }
+  appliquerAmbiance(e.reglages?.ambiance);
   entete.hidden = false;
   navigation.hidden = false;
   const visiteurs = visiteursDuJour(jeu.cfg, e, jeu.jour());
-  const rang = e.classement?.rang;
+  // Le nom ouvre le profil du musée ; le solde, ses finances.
   vider(entete,
-    h('a.entete-nom', { href: '#/classement' },
+    h('a.entete-nom', { href: '#/profil' },
       h('h1', e.nom),
-      h('div.entete-statut', [`${nombre(visiteurs)} visiteurs/j`, `réputation ${Math.round(e.reputation)}`, rang ? `${nombre(rang)}e` : null].filter(Boolean).join(' · '))),
+      h('div.entete-statut', h('span.statut-plaque', jeu.cfg.statuts[e.statut].nom.replace(/^Musée /, '')), `${nombre(visiteurs)} visiteurs/j`)),
     installation ? h('button.installer-entete', { type: 'button', onclick: () => app.installer() }, icone('installer'), 'Installer') : null,
-    h('button.solde', { type: 'button', onclick: () => app.naviguer('historique'), 'aria-label': 'Solde d\'Éclats' },
+    h('button.solde', { type: 'button', onclick: () => app.naviguer('finances'), 'aria-label': 'Finances' },
       solde === null ? '?' : nombre(solde)));
   majNavigation();
 }
@@ -143,20 +152,21 @@ function majEntete() {
 function majNavigation() {
   const e = jeu.etat;
   const route = routeCourante().nom;
+  const jour = jeu.jour();
   const arrivagesNeufs = e ? e.arrivages.reduce((n, a) => n + a.oeuvres.filter((o) => !o.achetee).length, 0) : 0;
-  const demandes = e?.prets?.demande ? 1 : 0;
+  // Ce qui demande une décision sur le plan : salles fermées, piste, prêt.
+  const urgences = e ? espacesOuverts(jeu.cfg, e, jour).fermes.length + (e.pistes || []).filter((p) => p.expire > jour).length + (e.prets?.demande ? 1 : 0) : 0;
   vider(navigation, ONGLETS.map((o) => {
-    const actif = o.route === route || (o.route === 'direction' && SOUS_PAGES_DIRECTION.includes(route))
-      || (o.route === 'musee' && route === 'oeuvre');
-    const pastille = o.route === 'arrivages' ? arrivagesNeufs : o.route === 'direction' ? demandes : 0;
-    return h('a', { href: `#/${o.route}`, classe: actif ? 'actif' : '' },
-      icone(o.icone), o.nom, pastille ? h('span.pastille', pastille) : null);
+    const actif = o.route === route || o.aussi.includes(route);
+    const pastille = o.route === 'collection' ? arrivagesNeufs : o.route === 'plan' ? urgences : 0;
+    return h('a', { href: `#/${o.route}`, classe: [actif ? 'actif' : '', o.centre ? 'centre' : ''].filter(Boolean).join(' '), 'aria-label': o.nom },
+      o.centre ? h('span.centre-rond', icone(o.icone)) : icone(o.icone), h('span.onglet-nom', o.nom), pastille ? h('span.pastille', pastille) : null);
   }));
 }
 
 function routeCourante() {
   const [nom, ...reste] = location.hash.replace(/^#\/?/, '').split('/');
-  return { nom: PAGES[nom] ? nom : 'musee', params: reste };
+  return { nom: PAGES[nom] ? nom : 'plan', params: reste };
 }
 
 let jetonRoute = 0;
@@ -180,17 +190,10 @@ async function afficherRoute({ garderDefilement = false } = {}) {
   }
   if (garderDefilement) window.scrollTo(0, defilement);
   majNavigation();
-  majCouleurTheme();
 }
 
-// La barre d'état du téléphone prend la couleur du haut de l'écran : le mur
-// de la première salle au musée, le papier crème ailleurs.
-function majCouleurTheme() {
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (!meta) return;
-  const mur = document.body.dataset.route === 'musee' ? document.body.style.getPropertyValue('--mur-entete') : '';
-  meta.content = mur || '#f6ecd9';
-}
+// L'ambiance suit l'heure : on la revoit toutes les cinq minutes.
+setInterval(() => { if (jeu.etat) appliquerAmbiance(jeu.etat.reglages?.ambiance); }, 5 * 60e3);
 
 // Après chaque changement d'état, la page courante se redessine en gardant
 // sa position ; plusieurs changements rapprochés n'en font qu'un.
@@ -247,7 +250,7 @@ function ecranCreation() {
       const ok = await tenter(() => jeu.creer(nom.value));
       if (ok) {
         await rafraichirSolde();
-        app.naviguer('arrivages');
+        app.naviguer('collection');
         afficherRoute();
       } else bouton.disabled = false;
     },
@@ -332,6 +335,7 @@ function verifierRapport() {
 /* ---------- Démarrage ---------- */
 
 async function demarrer() {
+  appliquerAmbiance(jeu.etat?.reglages?.ambiance);
   vider(vue, h('div.vide', 'Ouverture du musée…'));
   if (!backend.estConnecte()) { ecranConnexion(); return; }
   try {
