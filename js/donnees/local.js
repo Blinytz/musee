@@ -77,6 +77,8 @@ export function createLocal({ storage = globalThis.localStorage, catalogue, sold
 
     async demarrerSession({ id, dureeMin }) {
       const d = lire();
+      // Comme le serveur : rejouer le même identifiant rend la même session.
+      if (d.sessions[id]) return d.sessions[id];
       const debut = horloge();
       d.sessions[id] = { debut, fin: debut + dureeMin * 60e3 };
       ecrire(d);
@@ -86,7 +88,9 @@ export function createLocal({ storage = globalThis.localStorage, catalogue, sold
     async arreterSession(id) {
       const d = lire();
       const s = d.sessions[id];
+      if (s?.arretee) return { fin: s.arretee };
       const fin = s ? Math.min(horloge(), s.fin) : horloge();
+      if (s) { s.arretee = fin; ecrire(d); }
       return { fin };
     },
 

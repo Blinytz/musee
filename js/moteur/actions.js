@@ -646,10 +646,66 @@ export function figerSession(cfg, etat, oeuvreId, jour) {
   };
 }
 
-export function demarrerSession(cfg, etat0, { id, oeuvre, dureeMin, debut }, jour) {
+/* Session libre : pas de durée choisie, des pauses à volonté. Chaque période
+ * de travail est une tranche dont le serveur note le début et la fin ; seul
+ * le temps des tranches compte, borné à la durée maximale. Rien n'est payé
+ * à la pause : tout se règle à la fin, comme une session minutée. */
+
+/** Temps de travail d'une session (ms) à l'instant `t`, pauses exclues. */
+export function tempsActif(session, t) {
+  if (!session.libre) return Math.max(0, t - session.debut);
+  return session.segments.reduce((total, g) => total + Math.max(0, Math.min(g.fin ?? t, t) - g.debut), 0);
+}
+
+/** Une session libre est en pause quand sa dernière tranche est close. */
+export function enPause(session) {
+  return !!session?.libre && session.segments[session.segments.length - 1].fin != null;
+}
+
+/** Instant où la session atteint sa durée : jamais pendant une pause. */
+export function finPrevue(session) {
+  const cap = session.dureeMin * 60e3;
+  if (!session.libre) return session.debut + cap;
+  if (enPause(session)) return Infinity;
+  const g = session.segments[session.segments.length - 1];
+  return g.debut + Math.max(0, cap - tempsActif(session, g.debut));
+}
+
+/**
+ * Identifiant serveur de la tranche `k` : celui de la session pour la
+ * première, dérivé ensuite, pour qu'une reprise rejouée après une coupure
+ * retrouve la même tranche.
+ */
+export function idTranche(sessionId, k) {
+  return k ? `${sessionId.slice(0, 24)}${k.toString(16).padStart(12, '0')}` : sessionId;
+}
+
+export function mettreEnPause(cfg, etat0, { fin }) {
+  const etat = copie(etat0);
+  const s = etat.session;
+  if (!s?.libre) refuser('Aucune session libre en cours');
+  if (enPause(s)) refuser('Déjà en pause');
+  const g = s.segments[s.segments.length - 1];
+  g.fin = Math.max(g.debut, Math.min(Number(fin), finPrevue(s)));
+  return { etat };
+}
+
+export function reprendreSession(cfg, etat0, { id, debut }) {
+  const etat = copie(etat0);
+  const s = etat.session;
+  if (!s?.libre) refuser('Aucune session libre en cours');
+  if (!enPause(s)) refuser('La session n\'est pas en pause');
+  const derniere = s.segments[s.segments.length - 1];
+  if (tempsActif(s, derniere.fin) >= s.dureeMin * 60e3) refuser(`Durée maximale atteinte (${s.dureeMin / 60} h)`);
+  if (id !== idTranche(s.id, s.segments.length)) refuser('Tranche inattendue');
+  s.segments.push({ id, debut: Math.max(Number(debut), derniere.fin) });
+  return { etat };
+}
+
+export function demarrerSession(cfg, etat0, { id, oeuvre, dureeMin, debut, libre = false }, jour) {
   const s = cfg.session;
   if (etat0.session) refuser('Une session est déjà en cours', 'session');
-  const d = Math.round(Number(dureeMin));
+  const d = libre ? s.dureeMaxMin : Math.round(Number(dureeMin));
   if (!(d >= s.dureeMinMin && d <= s.dureeMaxMin)) refuser(`Durée de ${s.dureeMinMin} min à ${s.dureeMaxMin / 60} h`);
   const o = oeuvreDe(etat0, oeuvre);
   if (o.lieu !== 'atelier') refuser('L\'œuvre doit être à l\'atelier');
@@ -659,17 +715,21 @@ export function demarrerSession(cfg, etat0, { id, oeuvre, dureeMin, debut }, jou
   if (actuelle < requise) refuser(`Maîtrise ${requise} requise`, 'maitrise');
   const etat = copie(etat0);
   etat.session = { id, oeuvre, dureeMin: d, debut, jour, figes: figerSession(cfg, etat0, oeuvre, jour) };
+  if (libre) Object.assign(etat.session, { libre: true, segments: [{ id, debut }] });
   return { etat };
 }
 
 /**
  * Résultat d'une session arrêtée à `finMs` (horloge du serveur). Le temps
- * compté est borné à la durée prévue ; sous le seuil, rien ne compte.
- * `arrieres` : salaires restés dus des sessions précédentes.
+ * compté, pauses exclues, est borné à la durée prévue ; sous le seuil, rien
+ * ne compte. `arrieres` : salaires restés dus des sessions précédentes.
+ * `retenuMin` : temps déclaré par le joueur à la validation, pour retirer une
+ * pause oubliée ; il ne peut que réduire le temps compté.
  */
-export function resultatSession(cfg, session, finMs, { arrieres = 0, indemnites = 0, primes = 0 } = {}) {
+export function resultatSession(cfg, session, finMs, { arrieres = 0, indemnites = 0, primes = 0, retenuMin = null } = {}) {
   const prevueMs = session.dureeMin * 60e3;
-  const ecouleMs = Math.max(0, Math.min(prevueMs, finMs - session.debut));
+  let ecouleMs = Math.min(prevueMs, tempsActif(session, finMs));
+  if (retenuMin !== null && retenuMin !== undefined) ecouleMs = Math.min(ecouleMs, Math.max(0, Math.floor(Number(retenuMin) || 0)) * 60e3);
   let minutes = Math.floor(ecouleMs / 60e3);
   const complete = ecouleMs >= prevueMs;
   if (complete) minutes = session.dureeMin;
@@ -712,11 +772,19 @@ export function resultatSession(cfg, session, finMs, { arrieres = 0, indemnites 
   };
 }
 
-export function terminerSession(cfg, etat0, finMs, jour) {
+/**
+ * Termine la session à `params` (l'heure d'arrêt), ou `{ fin, retenuMin }`
+ * quand le joueur déclare avoir travaillé moins que le temps compté.
+ */
+export function terminerSession(cfg, etat0, params, jour) {
+  const { fin: finMs, retenuMin = null } = typeof params === 'object' && params !== null ? params : { fin: params };
   const etat = copie(etat0);
   const s = etat.session;
   if (!s) refuser('Aucune session en cours');
-  const r = resultatSession(cfg, s, finMs, { arrieres: etat.personnel?.arrieres || 0, indemnites: etat.indemnites || 0, primes: etat.primes || 0 });
+  const r = resultatSession(cfg, s, finMs, { arrieres: etat.personnel?.arrieres || 0, indemnites: etat.indemnites || 0, primes: etat.primes || 0, retenuMin });
+  // Temps retiré par le joueur, gardé dans l'historique.
+  const compteMin = Math.floor(Math.min(s.dureeMin * 60e3, tempsActif(s, finMs)) / 60e3);
+  const retire = retenuMin === null ? 0 : Math.max(0, compteMin - Math.max(0, Math.floor(Number(retenuMin) || 0)));
   const o = etat.oeuvres[s.oeuvre];
   if (o) {
     o.progression = r.progressionApres;
@@ -752,8 +820,14 @@ export function terminerSession(cfg, etat0, finMs, jour) {
     avancerChantiers(cfg, etat, r.minutes, jour);
   }
 
+  // Fin réelle d'une session libre : la fin de sa dernière tranche.
+  const derniere = s.libre ? s.segments[s.segments.length - 1] : null;
   const entree = {
-    id: s.id, debut: s.debut, fin: s.debut + r.minutes * 60e3, jour: s.jour,
+    id: s.id, debut: s.debut,
+    fin: derniere ? Math.min(derniere.fin ?? finMs, finPrevue(s)) : s.debut + r.minutes * 60e3,
+    jour: s.jour,
+    ...(s.libre ? { libre: true, pauses: s.segments.length - 1 } : {}),
+    ...(retire ? { retire } : {}),
     oeuvre: s.oeuvre, titre: o?.titre || '?', support: s.figes.support,
     minutes: r.minutes, travail: Math.round(r.travail), perdu: Math.round(r.perdu),
     avant: r.progressionAvant, apres: r.progressionApres, eclats: r.eclats,
@@ -780,7 +854,7 @@ export function terminerSession(cfg, etat0, finMs, jour) {
     gain: r.eclats > 0 ? {
       montant: r.eclats, cle: `musee:session:${s.id}`, referenceId: s.id,
       motif: `Session : ${o?.titre || 'restauration'}`, type: 'session',
-      meta: { oeuvre: s.oeuvre, minutes: r.minutes, recettes: entree.recettes, salaires: entree.salaires, impot: entree.impot },
+      meta: { oeuvre: s.oeuvre, minutes: r.minutes, recettes: entree.recettes, salaires: entree.salaires, impot: entree.impot, ...(retire ? { retire } : {}) },
     } : null,
   };
 }

@@ -122,13 +122,17 @@ async function choisirOeuvre(app, e, cfg) {
   });
 }
 
-/** Choix de la durée : de 10 min à 7 h, à la minute près. */
+/**
+ * Choix de la session : minutée (de 10 min à 7 h, à la minute près) ou libre
+ * (sans durée, avec des pauses, jusqu'à 7 h de travail).
+ */
 export function choisirDuree(app, o) {
   const { jeu } = app;
   const cfg = jeu.cfg;
   const e = jeu.etat;
   const s = cfg.session;
   let minutes = Math.min(s.dureeMaxMin, Math.max(s.dureeMinMin, e.reglages.dureeSession || s.dureeDefautMin));
+  let libre = !!e.reglages.sessionLibre;
   // L'aperçu rejoue exactement la fin de session : mêmes moteurs, même
   // figement des recettes, des salaires et du travail des assistants.
   const figes = figerSession(cfg, e, o.id, jeu.jour());
@@ -146,33 +150,57 @@ export function choisirDuree(app, o) {
     type: 'button', onclick: () => { minutes = m; curseur.value = m; maj(); },
   }, duree(m)));
 
+  const projeter = (m) => resultatSession(cfg, { debut: 0, dureeMin: s.dureeMaxMin, figes }, m * 60e3, { arrieres: e.personnel?.arrieres || 0 });
+  // Session libre : le temps qu'il faudrait pour finir l'œuvre.
+  function ligneFin() {
+    const max = projeter(s.dureeMaxMin);
+    if (max.progressionApres < 1) {
+      return h('div.ligne.espace', h('span.discret', `En ${duree(s.dureeMaxMin)}`), h('b.nombre', `${pourcent(max.progressionAvant)} → ${pourcent(max.progressionApres)}`));
+    }
+    let bas = s.seuilArretMin;
+    let haut = s.dureeMaxMin;
+    while (bas < haut) {
+      const m = Math.floor((bas + haut) / 2);
+      if (projeter(m).progressionApres >= 1) haut = m; else bas = m + 1;
+    }
+    return h('div.ligne.espace', h('span.discret', 'Restaurée en'), h('b.nombre', duree(bas)));
+  }
+
+  const onglets = h('div.onglets');
+  const reglage = h('div.pile',
+    valeur,
+    h('div.ligne', pas(-10), pas(-1), curseur, pas(1), pas(10)),
+    h('div.raccourcis', raccourcis));
+
   function maj() {
+    vider(onglets, [[false, 'Minuteur'], [true, 'Libre']].map(([id, nom]) => h('button', {
+      type: 'button', classe: libre === id ? 'actif' : '', onclick: () => { libre = id; maj(); },
+    }, nom)));
+    reglage.hidden = libre;
     valeur.textContent = duree(minutes);
-    const r = resultatSession(cfg, { debut: 0, dureeMin: minutes, figes }, minutes * 60e3, { arrieres: e.personnel?.arrieres || 0 });
+    const r = projeter(libre ? 60 : minutes);
     vider(details,
+      libre ? ligneFin() : null,
+      libre ? h('div.fiche-legende', { style: { marginTop: '6px' } }, 'Pour 1 h') : null,
       h('div.ligne.espace', h('span.discret', 'Restauration'), h('b.nombre', `${pourcent(r.progressionAvant)} → ${pourcent(r.progressionApres)}`)),
       r.assistants.map((a) => ligneAssistant(app, a)),
       lignesFinances(r.finances),
-      r.perdu > 0.5 ? h('div.ligne.espace', h('span.discret', 'Surplus perdu'), h('span', { style: { color: 'var(--rouge)' } }, duree(r.perdu))) : null,
+      !libre && r.perdu > 0.5 ? h('div.ligne.espace', h('span.discret', 'Surplus perdu'), h('span', { style: { color: 'var(--rouge)' } }, duree(r.perdu))) : null,
     );
   }
   maj();
 
   const f = feuille({
     titre: cartel(app, o, null).titre,
-    contenu: h('div.pile',
-      valeur,
-      h('div.ligne', pas(-10), pas(-1), curseur, pas(1), pas(10)),
-      h('div.raccourcis', raccourcis),
-      details),
+    contenu: h('div.pile', onglets, reglage, details),
     actions: h('button.bouton.primaire.plein', {
       type: 'button', style: { marginTop: '14px' },
       onclick: async (ev) => {
         ev.currentTarget.disabled = true;
-        const ok = await tenter(() => jeu.demarrerSession(o.id, minutes));
+        const ok = await tenter(() => jeu.demarrerSession(o.id, minutes, { libre }));
         if (ok) {
           f.fermer();
-          jeu.executer('reglages', { dureeSession: minutes }).catch(() => {});
+          jeu.executer('reglages', { dureeSession: minutes, sessionLibre: libre }).catch(() => {});
         } else ev.currentTarget.disabled = false;
       },
     }, 'Lancer la session'),

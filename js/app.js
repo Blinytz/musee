@@ -8,6 +8,7 @@ import { h, vider, icone, nombre } from './ui/dom.js';
 import { annoncer, messageErreur, tenter } from './ui/composants.js';
 import { afficherSession, afficherBilan } from './ui/pages/session.js';
 import { visiteursDuJour } from './moteur/visiteurs.js';
+import { finPrevue } from './moteur/actions.js';
 
 const PAGES = {
   musee: () => import('./ui/pages/musee.js'),
@@ -265,9 +266,9 @@ async function verifierSession() {
   const e = jeu.etat;
   if (!e) return;
   if (e.session) {
-    if (jeu.maintenant() >= e.session.debut + e.session.dureeMin * 60e3) {
-      await tenter(() => jeu.terminerSession());
-    } else if (!sessionAffichee) {
+    // Une session libre arrivée à 7 h se met en pause et reste à valider.
+    if (jeu.maintenant() >= finPrevue(e.session)) await tenter(() => jeu.terminerSession());
+    if (jeu.etat?.session && !sessionAffichee) {
       sessionAffichee = afficherSession(app, { onFin: () => { sessionAffichee = null; } });
     }
   }

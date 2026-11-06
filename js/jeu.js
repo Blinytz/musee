@@ -219,32 +219,74 @@ export function createJeu({ backend, catalogue, storage = globalThis.localStorag
 
   /* ---------- Sessions ---------- */
 
-  async function demarrerSession(oeuvre, dureeMin) {
+  /**
+   * Lance une session minutée de `dureeMin` minutes, ou libre (`libre`) :
+   * sans durée, avec des pauses, bornée à la durée maximale.
+   */
+  async function demarrerSession(oeuvre, dureeMin, { libre = false } = {}) {
     // Contrôle complet avant de prévenir le serveur.
-    A.demarrerSession(cfg, etat, { id: 'essai', oeuvre, dureeMin, debut: 0 }, jour());
+    A.demarrerSession(cfg, etat, { id: 'essai', oeuvre, dureeMin, debut: 0, libre }, jour());
     const id = uuid();
     // Le titre part dans la notification de fin : on ne le révèle pas avant
     // la restauration.
     const titre = '';
-    const { debut } = await backend.demarrerSession({ id, oeuvre, dureeMin, titre });
-    return executer('demarrerSession', { id, oeuvre, dureeMin, debut });
+    const duree = libre ? cfg.session.dureeMaxMin : dureeMin;
+    const { debut } = await backend.demarrerSession({ id, oeuvre, dureeMin: duree, titre });
+    return executer('demarrerSession', { id, oeuvre, dureeMin: duree, debut, libre });
+  }
+
+  /** Tranche en cours d'une session libre, arrêtée côté serveur : sa fin. */
+  async function arreterTranche(s) {
+    const g = s.segments[s.segments.length - 1];
+    if (g.fin != null) return g.fin;
+    return (await backend.arreterSession(g.id)).fin;
+  }
+
+  /** Met la session libre en pause : l'heure est celle du serveur. */
+  async function pause() {
+    const s = etat?.session;
+    if (!s?.libre || A.enPause(s)) return null;
+    const fin = await arreterTranche(s);
+    return executer('mettreEnPause', { fin });
+  }
+
+  /** Reprend la session libre : une nouvelle tranche, pour le temps qui reste. */
+  async function reprendre() {
+    const s = etat?.session;
+    if (!s?.libre || !A.enPause(s)) return null;
+    const derniere = s.segments[s.segments.length - 1];
+    const resteMin = Math.ceil((s.dureeMin * 60e3 - A.tempsActif(s, derniere.fin)) / 60e3);
+    const id = A.idTranche(s.id, s.segments.length);
+    // Contrôle avant de prévenir le serveur (durée maximale atteinte…).
+    A.reprendreSession(cfg, etat, { id, debut: derniere.fin });
+    const s0 = cfg.session;
+    const duree = Math.min(s0.dureeMaxMin, Math.max(s0.dureeMinMin, resteMin));
+    const { debut } = await backend.demarrerSession({ id, oeuvre: s.oeuvre, dureeMin: duree, titre: '' });
+    return executer('reprendreSession', { id, debut });
   }
 
   /**
    * Termine la session : à l'heure prévue, ou maintenant si `anticipe`.
    * Plusieurs appels simultanés (minuterie, retour au premier plan) se
-   * rejoignent sur la même fin.
+   * rejoignent sur la même fin. Une session libre ne se termine que validée
+   * par le joueur (`anticipe`), qui peut réduire le temps compté
+   * (`retenuMin`) ; arrivée à la durée maximale, elle se met en pause.
    */
   let finEnCours = null;
-  function terminerSession({ anticipe = false } = {}) {
+  function terminerSession({ anticipe = false, retenuMin = null } = {}) {
     if (finEnCours) return finEnCours;
     const s = etat?.session;
     if (!s) return Promise.resolve(null);
     finEnCours = (async () => {
-      let fin = s.debut + s.dureeMin * 60e3;
-      if (anticipe) fin = (await backend.arreterSession(s.id)).fin;
-      else if (maintenant() < fin) return null;
-      return executer('terminerSession', fin);
+      let fin = A.finPrevue(s);
+      if (!anticipe && maintenant() < fin) return null;
+      if (s.libre && !anticipe) {
+        await pause();
+        return null;
+      }
+      if (s.libre) fin = await arreterTranche(s);
+      else if (anticipe) fin = (await backend.arreterSession(s.id)).fin;
+      return executer('terminerSession', retenuMin === null ? fin : { fin, retenuMin });
     })().finally(() => { finEnCours = null; });
     return finEnCours;
   }
@@ -301,6 +343,8 @@ export function createJeu({ backend, catalogue, storage = globalThis.localStorag
     executer,
     verser,
     demarrerSession,
+    pause,
+    reprendre,
     terminerSession,
     ecouter(f) { ecouteurs.add(f); return () => ecouteurs.delete(f); },
     configParDefaut: CONFIG,

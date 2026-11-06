@@ -11,6 +11,7 @@ import { rangTirage, tirerDansListe, tirerArrivage, poidsNiveaux } from '../js/m
 import { creerEtat } from '../js/moteur/etat.js';
 import {
   acheter, deplacer, demarrerSession, terminerSession, resultatSession, investir,
+  mettreEnPause, reprendreSession, tempsActif, enPause, finPrevue, idTranche,
   accepterPret, ouvrirExposition, lancerCampagne, ErreurJeu,
 } from '../js/moteur/actions.js';
 import { avancer, fermerJour, ouvrirJour, creerMusee } from '../js/moteur/journee.js';
@@ -223,6 +224,78 @@ test('session achevée : progression, surplus perdu, maîtrise, charges en clair
   assert.deepEqual([f.recettes, f.salaires, f.accueil, f.entretien, f.assurance, f.fournitures, f.impot], [21, 1, 4, 3, 0, 1, 0]);
   assert.equal(r.resultat.eclats, 12);
   assert.equal(r.gain.cle, 'musee:session:11111111-1111-4111-8111-111111111111');
+});
+
+test('session libre : les pauses ne comptent pas, la durée maximale borne le travail', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  let e = etatAvec([{ id: 1, lieu: 'atelier' }]);
+  e = demarrerSession(cfg, e, { id, oeuvre: 1, dureeMin: 5, debut: 0, libre: true }, 20000).etat;
+  assert.equal(e.session.dureeMin, 420, 'la durée demandée est ignorée');
+  assert.equal(finPrevue(e.session), 420 * 60e3);
+  // 30 min de travail, 2 h de pause, puis 20 min.
+  e = mettreEnPause(cfg, e, { fin: 30 * 60e3 }).etat;
+  assert.ok(enPause(e.session));
+  assert.equal(finPrevue(e.session), Infinity);
+  assert.throws(() => mettreEnPause(cfg, e, { fin: 40 * 60e3 }), /Déjà en pause/);
+  assert.throws(() => reprendreSession(cfg, e, { id, debut: 150 * 60e3 }), /Tranche inattendue/);
+  const t1 = idTranche(id, 1);
+  assert.match(t1, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  assert.notEqual(t1, id);
+  e = reprendreSession(cfg, e, { id: t1, debut: 150 * 60e3 }).etat;
+  assert.equal(finPrevue(e.session), 150 * 60e3 + 390 * 60e3);
+  assert.equal(tempsActif(e.session, 170 * 60e3), 50 * 60e3);
+  const r = terminerSession(cfg, e, 170 * 60e3, 20000);
+  assert.equal(r.resultat.minutes, 50);
+  assert.equal(r.etat.maitrise.peinture, 50);
+  assert.equal(r.resultat.session.fin, 170 * 60e3);
+  assert.equal(r.resultat.session.pauses, 1);
+  assert.equal(r.etat.session, null);
+  // Même travail qu'une session minutée de 50 minutes.
+  const m = terminerSession(cfg, enSession(etatAvec([{ id: 1, lieu: 'atelier' }]), 50), 50 * 60e3, 20000);
+  assert.equal(r.resultat.travail, m.resultat.travail);
+  assert.equal(r.resultat.eclats, m.resultat.eclats);
+});
+
+test('session libre : terminée en pause, et jamais plus de 7 h de travail', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  let e = etatAvec([{ id: 1, lieu: 'atelier' }]);
+  e = demarrerSession(cfg, e, { id, oeuvre: 1, debut: 0, libre: true }, 20000).etat;
+  e = mettreEnPause(cfg, e, { fin: 400 * 60e3 }).etat;
+  e = reprendreSession(cfg, e, { id: idTranche(id, 1), debut: 1000 * 60e3 }).etat;
+  // Une pause annoncée trop tard est ramenée à la durée maximale.
+  const tard = mettreEnPause(cfg, e, { fin: 1100 * 60e3 }).etat;
+  assert.equal(tempsActif(tard.session, Infinity), 420 * 60e3);
+  assert.throws(() => reprendreSession(cfg, tard, { id: idTranche(id, 2), debut: 1200 * 60e3 }), /Durée maximale/);
+  // Terminée pendant la pause : l'heure d'arrêt n'ajoute rien.
+  const r = terminerSession(cfg, tard, 5000 * 60e3, 20000);
+  assert.equal(r.resultat.minutes, 420);
+  assert.equal(r.resultat.session.fin, 1020 * 60e3);
+  // Sous 10 minutes de travail, rien ne compte, même avec une longue pause.
+  let c = demarrerSession(cfg, etatAvec([{ id: 1, lieu: 'atelier' }]), { id, oeuvre: 1, debut: 0, libre: true }, 20000).etat;
+  c = mettreEnPause(cfg, c, { fin: 9 * 60e3 }).etat;
+  assert.equal(terminerSession(cfg, c, 600 * 60e3, 20000).resultat.minutes, 0);
+});
+
+test("validation : le temps compté se réduit, jamais ne s'allonge", () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  let e = demarrerSession(cfg, etatAvec([{ id: 1, lieu: 'atelier' }]), { id, oeuvre: 1, debut: 0, libre: true }, 20000).etat;
+  e = mettreEnPause(cfg, e, { fin: 90 * 60e3 }).etat;
+  const reduit = terminerSession(cfg, e, { fin: 90 * 60e3, retenuMin: 60 }, 20000);
+  assert.equal(reduit.resultat.minutes, 60);
+  assert.equal(reduit.resultat.session.retire, 30);
+  assert.equal(reduit.gain?.meta.retire ?? 30, 30);
+  assert.equal(reduit.etat.maitrise.peinture, 60);
+  // Même résultat qu'une session de 60 minutes.
+  const m = terminerSession(cfg, enSession(etatAvec([{ id: 1, lieu: 'atelier' }]), 60), 60 * 60e3, 20000);
+  assert.equal(reduit.resultat.travail, m.resultat.travail);
+  assert.equal(reduit.resultat.eclats, m.resultat.eclats);
+  // Déclarer plus ne donne rien de plus.
+  const gonfle = terminerSession(cfg, e, { fin: 90 * 60e3, retenuMin: 300 }, 20000);
+  assert.equal(gonfle.resultat.minutes, 90);
+  assert.equal(gonfle.resultat.session.retire, undefined);
+  // Sous 10 minutes déclarées, rien ne compte.
+  assert.equal(terminerSession(cfg, e, { fin: 90 * 60e3, retenuMin: 9 }, 20000).resultat.minutes, 0);
+  assert.equal(terminerSession(cfg, e, { fin: 90 * 60e3, retenuMin: -5 }, 20000).resultat.minutes, 0);
 });
 
 /* ---------- Journées ---------- */

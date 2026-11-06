@@ -561,6 +561,9 @@ input[type=range] { accent-color: var(--accent); }
 .session-pied .chiffres-session b { display: block; font-family: var(--titre); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
 .session-pied .chiffres-session span { font-size: 12px; color: var(--texte-2); }
 .session-pied .bouton { border-color: var(--accent); color: var(--accent); background: transparent; }
+.session-pied .bouton.primaire { background: var(--accent); color: var(--creme); }
+#session.en-pause .compte { opacity: 0.5; }
+#session.en-pause .session-toile canvas { filter: saturate(0.6) brightness(0.85); transition: filter 0.3s; }
 
 .comparaison { position: relative; touch-action: none; user-select: none; border-radius: 4px; overflow: hidden; background: var(--mur); }
 .comparaison canvas { display: block; width: 100%; height: auto; }

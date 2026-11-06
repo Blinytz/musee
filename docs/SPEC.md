@@ -69,6 +69,18 @@ Prix d'arrivage = arrondi(50 × prestige^1,3).
   côté serveur. Quitter l'app ou verrouiller l'écran ne fait rien perdre. La
   session se termine seule à l'heure prévue, avec une notification.
 - Arrêt anticipé possible : le temps écoulé compte s'il atteint 10 min.
+- Session libre (ajout du 6 novembre 2026) : pas de durée choisie, le chrono
+  monte ; pause et reprise à volonté, la session se termine quand le joueur le
+  décide. Seul le temps hors pause compte, borné à 7 h : la session se met
+  alors en pause d'elle-même (notifiée) et attend d'être validée. À la
+  validation, le joueur peut réduire le temps compté (une pause oubliée),
+  jamais l'augmenter ; les minutes retirées restent dans l'historique. Rien
+  n'est versé ni prélevé à la pause : tout se règle à la fin, aux taux figés
+  au lancement. Chaque période de travail est une tranche dont
+  le serveur note le début et la fin (`musee_session_demarrer` et
+  `musee_session_arreter`, sans changement de schéma) ; l'identifiant d'une
+  tranche dérive de celui de la session, pour qu'une reprise rejouée après une
+  coupure retrouve la même.
 - Travail effectif = durée × (1 + 0,25 × durée / 420) × (1 + bonus de maîtrise
   + bonus d'équipement de l'atelier).
 - Le surplus de travail au-delà de 100 % est perdu (affiché en fin de session).

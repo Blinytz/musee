@@ -108,6 +108,60 @@ test('session : un gain manqué se verse au chargement suivant, une seule fois',
   assert.equal(await backend.solde(), avant + aVerser.montant);
 });
 
+test('session libre : pause et reprise sans paiement, tout réglé à la fin', async () => {
+  let t = Date.UTC(2026, 10, 3, 12);
+  const { jeu, backend } = monter({ horloge: () => t });
+  await jeu.creer('Essai');
+  const a = jeu.etat.arrivages[0];
+  for (const o of a.oeuvres.slice(0, 3)) await jeu.executer('acheter', { arrivage: a.id, oeuvre: o.id, fiche: {} });
+  const [o1, o2] = Object.keys(jeu.etat.oeuvres).map(Number);
+  jeu.etat.oeuvres[o1].progression = 1;
+  await jeu.executer('deplacer', { oeuvre: o1, vers: { lieu: 'espace', espace: 's1', place: 0 } });
+  await jeu.executer('deplacer', { oeuvre: o2, vers: { lieu: 'atelier' } });
+  const solde = await backend.solde();
+  await jeu.demarrerSession(o2, null, { libre: true });
+  t += 30 * 60e3;
+  await jeu.pause();
+  assert.equal(await backend.solde(), solde, "rien n'est versé à la pause");
+  assert.equal(await jeu.terminerSession(), null, 'une session en pause ne finit pas seule');
+  t += 5 * 3600e3;
+  // Reprise interrompue avant l'écriture de l'état : rejouée, même tranche.
+  const ecrire = backend.enregistrerEtat;
+  backend.enregistrerEtat = async () => { throw new Error('Application fermée'); };
+  await assert.rejects(() => jeu.reprendre());
+  backend.enregistrerEtat = ecrire;
+  const debutTranche = t;
+  t += 60e3;
+  await jeu.reprendre();
+  assert.equal(jeu.etat.session.segments[1].debut, debutTranche);
+  t += 19 * 60e3;
+  // Validation : 5 minutes de pause oubliée retirées.
+  const r = await jeu.terminerSession({ anticipe: true, retenuMin: 45 });
+  assert.equal(r.resultat.minutes, 45);
+  assert.equal(r.resultat.session.retire, 5);
+  assert.ok(r.resultat.eclats > 0);
+  assert.equal(await backend.solde(), solde + r.resultat.eclats);
+  assert.equal(jeu.etat.session, null);
+});
+
+test("session libre : à 7 h de travail, elle se met en pause et attend d'être validée", async () => {
+  let t = Date.UTC(2026, 10, 3, 12);
+  const { jeu } = monter({ horloge: () => t });
+  await jeu.creer('Essai');
+  const a = jeu.etat.arrivages[0];
+  await jeu.executer('acheter', { arrivage: a.id, oeuvre: a.oeuvres[0].id, fiche: {} });
+  const o = Number(Object.keys(jeu.etat.oeuvres)[0]);
+  await jeu.executer('deplacer', { oeuvre: o, vers: { lieu: 'atelier' } });
+  await jeu.demarrerSession(o, null, { libre: true });
+  t += 9 * 3600e3;
+  assert.equal(await jeu.terminerSession(), null);
+  assert.ok(jeu.etat.session, 'la session attend la validation');
+  await assert.rejects(() => jeu.reprendre(), /Durée maximale/);
+  const r = await jeu.terminerSession({ anticipe: true, retenuMin: 400 });
+  assert.equal(r.resultat.minutes, 400);
+  assert.equal(r.resultat.session.retire, 20);
+});
+
 test('registre : une dépense ajustée par le serveur est remboursée et refusée', async () => {
   const appels = [];
   const fetch = async (url, options) => {

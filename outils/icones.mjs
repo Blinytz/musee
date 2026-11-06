@@ -49,6 +49,8 @@ const ICONES = {
   alerte: ['regular', 'warning'],
   arreter: ['fill', 'stop'],
   lancer: ['fill', 'play'],
+  pause: ['fill', 'pause'],
+  libre: ['regular', 'infinity'],
   plein: ['regular', 'arrows-out'],
   campagne: ['regular', 'megaphone'],
   globe: ['regular', 'globe-hemisphere-east'],
